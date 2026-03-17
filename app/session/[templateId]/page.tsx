@@ -76,7 +76,7 @@ export default function SessionPage() {
           if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
             audioCtxRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
           }
-          const ctx = audioCtxRef.current;
+          const ctx = audioCtxRef.current!;
           await ctx.resume();
           const binary = atob(base64);
           const bytes = new Uint8Array(binary.length);
@@ -134,7 +134,7 @@ export default function SessionPage() {
       if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
         audioCtxRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
       }
-      const ctx = audioCtxRef.current;
+      const ctx = audioCtxRef.current!;
       await ctx.resume();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
