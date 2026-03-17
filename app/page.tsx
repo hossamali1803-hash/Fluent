@@ -14,6 +14,18 @@ const LANGUAGES = [
   { code: "de", flag: "🇩🇪", label: "German" },
 ];
 
+const ALL_THEMES_LIST = [
+  { key: "daily",         emoji: "🌅", label: "Daily Life" },
+  { key: "professional",  emoji: "💼", label: "Work" },
+  { key: "social",        emoji: "🍽️", label: "Social" },
+  { key: "travel",        emoji: "✈️", label: "Travel" },
+  { key: "services",      emoji: "🛒", label: "Shopping" },
+  { key: "fitness",       emoji: "💪", label: "Health & Fitness" },
+  { key: "food",          emoji: "🍔", label: "Food & Dining" },
+  { key: "education",     emoji: "📚", label: "Education" },
+  { key: "entertainment", emoji: "🎬", label: "Entertainment" },
+];
+
 export default function Home() {
   const router = useRouter();
   const [pendingTasks, setPendingTasks] = useState(0);
@@ -24,6 +36,7 @@ export default function Home() {
   const [language, setLanguage] = useState("en");
   const [userName, setUserName] = useState("");
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [showAddTopic, setShowAddTopic] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem("onboardingDone")) {
@@ -54,6 +67,14 @@ export default function Home() {
     const updatedHidden = [...hidden, id];
     setHidden(updatedHidden);
     localStorage.setItem("hiddenScenarios", JSON.stringify(updatedHidden));
+  }
+
+  async function addTopic(category: string) {
+    const updated = [...selectedThemes, category];
+    setSelectedThemes(updated);
+    localStorage.setItem("selectedThemes", JSON.stringify(updated));
+    setShowAddTopic(false);
+    await generateMore(category);
   }
 
   async function generateMore(category: string) {
@@ -207,6 +228,44 @@ export default function Home() {
           </div>
         );
       })}
+
+      {/* Add topic */}
+      {selectedThemes.length > 0 && selectedThemes.length < 9 && (
+        <button onClick={() => setShowAddTopic(true)} style={{
+          width: "100%", background: "#ffffff", border: "1px dashed #d4c9ff",
+          borderRadius: 16, padding: "16px", cursor: "pointer",
+          color: "#8b5cf6", fontSize: 14, fontWeight: 600,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+          marginBottom: 32,
+        }}>
+          ＋ Add topic
+        </button>
+      )}
+
+      {/* Add topic sheet */}
+      {showAddTopic && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#ffffff", borderRadius: 24, padding: 24, width: "100%", maxWidth: 480 }}>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#1a1a2a", marginBottom: 4 }}>Add a topic</div>
+            <div style={{ color: "#6b6b8a", fontSize: 13, marginBottom: 20 }}>A scenario will be created for you automatically</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 20 }}>
+              {ALL_THEMES_LIST.filter((t) => !selectedThemes.includes(t.key)).map((t) => (
+                <button key={t.key} onClick={() => addTopic(t.key)} style={{
+                  padding: "14px 8px", borderRadius: 14, border: "1px solid #ece9ff",
+                  background: "#f5f4ff", cursor: "pointer",
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 6,
+                }}>
+                  <span style={{ fontSize: 22 }}>{t.emoji}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: "#6b6b8a", textAlign: "center", lineHeight: 1.2 }}>{t.label}</span>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setShowAddTopic(false)} style={{ width: "100%", background: "#f0eeff", border: "none", borderRadius: 14, padding: 14, color: "#6b6b8a", fontWeight: 600, cursor: "pointer" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>

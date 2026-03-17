@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { TEMPLATES } from "@/lib/templates";
 
 const ALL_THEMES = [
   { key: "daily",         emoji: "🌅", label: "Daily Life" },
@@ -25,12 +26,36 @@ export default function OnboardingPage() {
   const [name, setName] = useState("");
   const [language, setLanguage] = useState("en");
   const [themes, setThemes] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  function finish() {
+  async function finish() {
     if (name.trim()) localStorage.setItem("userName", name.trim());
     localStorage.setItem("practiceLanguage", language);
     if (themes.length > 0) localStorage.setItem("selectedThemes", JSON.stringify(themes));
     localStorage.setItem("onboardingDone", "true");
+
+    if (themes.length > 0) {
+      setLoading(true);
+      const existing: any[] = JSON.parse(localStorage.getItem("generatedScenarios") ?? "[]");
+      const results = await Promise.allSettled(
+        themes.map(async (category) => {
+          const allInCategory = TEMPLATES.filter((t) => t.category === category);
+          const res = await fetch("/api/generate-scenario", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ category, existingNames: allInCategory.map((t) => t.name), language }),
+          });
+          if (res.ok) return res.json();
+        })
+      );
+      const newScenarios = results
+        .filter((r) => r.status === "fulfilled" && r.value?.id)
+        .map((r) => (r as PromiseFulfilledResult<any>).value);
+      if (newScenarios.length > 0) {
+        localStorage.setItem("generatedScenarios", JSON.stringify([...existing, ...newScenarios]));
+      }
+    }
+
     router.push("/");
   }
 
@@ -82,17 +107,30 @@ export default function OnboardingPage() {
           flexDirection: "column",
         }}
       >
+        {/* Loading */}
+        {loading && (
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
+            <div style={{ width: 48, height: 48, border: "3px solid #ece9ff", borderTopColor: "#8b5cf6", borderRadius: "50%", animation: "spin 0.8s linear infinite", margin: "0 auto 20px" }} />
+            <div style={{ fontSize: 17, fontWeight: 700, color: "#1a1a2a", marginBottom: 8 }}>Setting up your topics...</div>
+            <div style={{ color: "#6b6b8a", fontSize: 14 }}>Creating personalised scenarios for you</div>
+            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+          </div>
+        )}
+
         {/* Step 0 — Name */}
-        {step === 0 && (
+        {!loading && step === 0 && (
           <>
             <div style={{ textAlign: "center", marginBottom: 32 }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>👋</div>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🎙️</div>
               <h1 style={{ fontSize: 24, fontWeight: 800, color: "#1a1a2a", margin: "0 0 8px" }}>
                 Welcome to Fluent
               </h1>
-              <p style={{ color: "#6b6b8a", fontSize: 15, margin: 0 }}>
-                Let&apos;s personalise your experience
+              <p style={{ color: "#6b6b8a", fontSize: 15, margin: "0 0 16px" }}>
+                Practice real conversations with an AI that plays the other person — your trainer, your barista, your interviewer.
               </p>
+              <div style={{ background: "#f0eeff", borderRadius: 12, padding: "10px 16px", display: "inline-block" }}>
+                <span style={{ color: "#8b5cf6", fontSize: 13, fontWeight: 600 }}>No scripts. Just talk.</span>
+              </div>
             </div>
 
             <label style={{ color: "#1a1a2a", fontSize: 14, fontWeight: 600, marginBottom: 8, display: "block" }}>
@@ -158,12 +196,16 @@ export default function OnboardingPage() {
         )}
 
         {/* Step 1 — Language */}
-        {step === 1 && (
+        {!loading && step === 1 && (
           <>
             <div style={{ textAlign: "center", marginBottom: 32 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🌍</div>
               <h1 style={{ fontSize: 24, fontWeight: 800, color: "#1a1a2a", margin: "0 0 8px" }}>
                 What are you practising?
               </h1>
+              <p style={{ color: "#6b6b8a", fontSize: 14, margin: 0 }}>
+                The AI will speak in your target language the whole time — you practice by replying naturally.
+              </p>
             </div>
 
             <div style={{ display: "flex", gap: 12, marginBottom: 32 }}>
@@ -251,14 +293,15 @@ export default function OnboardingPage() {
         )}
 
         {/* Step 2 — Themes */}
-        {step === 2 && (
+        {!loading && step === 2 && (
           <>
             <div style={{ textAlign: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🎯</div>
               <h1 style={{ fontSize: 24, fontWeight: 800, color: "#1a1a2a", margin: "0 0 8px" }}>
                 What topics interest you?
               </h1>
               <p style={{ color: "#6b6b8a", fontSize: 14, margin: 0 }}>
-                Pick any that feel relevant
+                After a conversation, you get feedback and tasks tailored to these topics.
               </p>
             </div>
 

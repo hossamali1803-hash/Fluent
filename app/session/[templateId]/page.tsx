@@ -58,7 +58,7 @@ export default function SessionPage() {
     const res = await fetch("/api/conversation/start", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ templateId: template.id, openers: template.openers, language }),
+      body: JSON.stringify({ templateId: template.id, openers: template.openers, language, userName: userName || undefined }),
     });
     const data = await res.json();
     const msg: Message = { id: "0", role: "assistant", content: data.text };
