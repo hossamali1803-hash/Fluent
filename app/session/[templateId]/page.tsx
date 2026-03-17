@@ -28,8 +28,10 @@ export default function SessionPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const sessionActiveRef = useRef(true);
   const vadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const vadActiveRef = useRef(false);
   const hasSpeechRef = useRef(false);
@@ -70,7 +72,7 @@ export default function SessionPage() {
   function playAudio(base64: string, text?: string): Promise<void> {
     return new Promise(async (resolve) => {
       setStatus("speaking");
-      const done = () => { resolve(); startListening(); };
+      const done = () => { resolve(); if (sessionActiveRef.current) startListening(); };
       if (base64) {
         try {
           // Use AudioContext — always routes to speaker on iOS, not earpiece
@@ -84,6 +86,7 @@ export default function SessionPage() {
           for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
           const buffer = await ctx.decodeAudioData(bytes.buffer);
           const source = ctx.createBufferSource();
+          audioSourceRef.current = source;
           source.buffer = buffer;
           source.connect(ctx.destination);
           source.onended = done;
@@ -233,15 +236,26 @@ export default function SessionPage() {
     }
   }
 
-  function endSession() {
+  function stopEverything() {
+    sessionActiveRef.current = false;
+    vadActiveRef.current = false;
+    if (vadTimerRef.current) { clearTimeout(vadTimerRef.current); vadTimerRef.current = null; }
+    // Stop AudioContext source (main audio playback path)
+    try { audioSourceRef.current?.stop(); } catch {}
+    audioSourceRef.current = null;
+    // Stop HTMLAudioElement fallback
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     window.speechSynthesis.cancel();
-    vadActiveRef.current = false;
-    mediaRecorderRef.current?.stop();
+    // Stop mic
+    try { mediaRecorderRef.current?.stop(); } catch {}
     mediaRecorderRef.current = null;
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
     micStreamRef.current = null;
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  }
+
+  function endSession() {
+    stopEverything();
     localStorage.setItem("debriefPending", JSON.stringify({
       history: historyRef.current,
       templateId: template.id,
@@ -390,7 +404,7 @@ export default function SessionPage() {
               style={{ width: "100%", background: "#f0eeff", color: "#1a1a2a", border: "1px solid #d4c9ff", borderRadius: 14, padding: 16, fontSize: 16, fontWeight: 600, cursor: "pointer", marginBottom: 10 }}
             >Keep going</button>
             <button
-              onClick={() => { if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; } window.speechSynthesis.cancel(); vadActiveRef.current = false; mediaRecorderRef.current?.stop(); mediaRecorderRef.current = null; micStreamRef.current?.getTracks().forEach((t) => t.stop()); micStreamRef.current = null; if (timerRef.current) clearInterval(timerRef.current); router.push("/"); }}
+              onClick={() => { stopEverything(); router.push("/"); }}
               style={{ width: "100%", background: "transparent", color: "#6b6b8a", border: "none", borderRadius: 14, padding: 12, fontSize: 14, cursor: "pointer" }}
             >Discard & go home</button>
           </div>
