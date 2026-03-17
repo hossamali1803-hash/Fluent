@@ -6,7 +6,7 @@ import { textToSpeechBase64 } from "@/lib/tts";
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
-  const { userMessage, history, templateId, turnNumber, systemPrompt: passedSystemPrompt, language } = await req.json();
+  const { userMessage, history, templateId, turnNumber, systemPrompt: passedSystemPrompt, language, userName } = await req.json();
   const template = TEMPLATES.find((t) => t.id === templateId);
 
   const messages = [
@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
     { role: "user" as const, content: userMessage },
   ];
 
-  const basePrompt = passedSystemPrompt ?? template?.systemPrompt ?? "";
+  const basePrompt = (passedSystemPrompt ?? template?.systemPrompt ?? "") +
+    (userName ? `\n\nThe user's name is ${userName}. Use their name occasionally to make the conversation feel natural and personal.` : "");
   const langNames: Record<string, string> = { en: "English", de: "German" };
   const langName = langNames[language ?? "en"] ?? "English";
   const langInstruction = `\n\nLANGUAGE RULE: You must respond ONLY in ${langName}. Never translate, never switch languages, never repeat the user's words in another language. Regardless of what language the user writes in, your reply is always ${langName} only.`;

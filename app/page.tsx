@@ -22,14 +22,23 @@ export default function Home() {
   const [hidden, setHidden] = useState<string[]>([]);
   const [generating, setGenerating] = useState<string | null>(null);
   const [language, setLanguage] = useState("en");
+  const [userName, setUserName] = useState("");
+  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
 
   useEffect(() => {
+    if (!localStorage.getItem("onboardingDone")) {
+      router.push("/onboarding");
+      return;
+    }
     const tasks = JSON.parse(localStorage.getItem("tasks") ?? "[]");
     setPendingTasks(tasks.filter((t: any) => t.status === "pending").length);
     setTotalXP(parseInt(localStorage.getItem("totalXP") ?? "340"));
     setGenerated(JSON.parse(localStorage.getItem("generatedScenarios") ?? "[]"));
     setHidden(JSON.parse(localStorage.getItem("hiddenScenarios") ?? "[]"));
     setLanguage(localStorage.getItem("practiceLanguage") ?? "en");
+    setUserName(localStorage.getItem("userName") ?? "");
+    const storedThemes = localStorage.getItem("selectedThemes");
+    setSelectedThemes(storedThemes ? JSON.parse(storedThemes) : []);
   }, []);
 
   function selectLanguage(code: string) {
@@ -80,7 +89,11 @@ export default function Home() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a2a" }}>Fluent</div>
-          <div style={{ color: "#6b6b8a", fontSize: 14 }}>Pick a scenario and start talking</div>
+          {userName ? (
+            <div style={{ color: "#1a1a2a", fontSize: 14, fontWeight: 600 }}>Hi, {userName} 👋</div>
+          ) : (
+            <div style={{ color: "#6b6b8a", fontSize: 14 }}>Pick a scenario and start talking</div>
+          )}
         </div>
         <button onClick={() => router.push("/tasks")} style={{
           background: "#ffffff", border: `1px solid ${pendingTasks > 0 ? "#8b5cf6" : "#ece9ff"}`,
@@ -128,7 +141,7 @@ export default function Home() {
       </div>
 
       {/* Themes */}
-      {Object.entries(THEMES).map(([category, theme]) => {
+      {Object.entries(THEMES).filter(([category]) => selectedThemes.length === 0 || selectedThemes.includes(category)).map(([category, theme]) => {
         const staticItems = TEMPLATES.filter((t) => t.category === category && !hidden.includes(t.id));
         const generatedItems = generated.filter((t) => t.category === category);
         const allItems = [...staticItems, ...generatedItems];

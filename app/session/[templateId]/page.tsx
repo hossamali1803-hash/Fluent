@@ -14,6 +14,7 @@ export default function SessionPage() {
   const template = staticTemplate ?? generated.find((t: any) => t.id === templateId) ?? TEMPLATES[0];
 
   const language = typeof window !== "undefined" ? (localStorage.getItem("practiceLanguage") ?? "en") : "en";
+  const userName = typeof window !== "undefined" ? (localStorage.getItem("userName") ?? "") : "";
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<Status>("idle");
@@ -217,6 +218,7 @@ export default function SessionPage() {
           turnNumber: turnRef.current,
           systemPrompt: template.systemPrompt,
           language,
+          userName: userName || undefined,
         }),
       });
       const data = await res.json();

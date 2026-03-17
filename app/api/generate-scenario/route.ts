@@ -5,11 +5,15 @@ import { THEMES } from "@/lib/templates";
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const THEME_SITUATIONS: Record<string, string> = {
-  daily:        "gym with trainer, doctor appointment, flatmate conversation, neighbour in hallway, parents evening",
-  professional: "performance review, giving feedback, resolving team conflict, onboarding new hire, asking for time off",
-  social:       "chatting on a long flight, cooking class stranger, museum conversation, conference networking, language exchange meetup",
-  travel:       "hotel check-in, taxi ride, train ticket counter, customs officer, lost luggage desk",
-  services:     "phone repair counter, haircut at salon, bank advisor, returning faulty product at shop",
+  daily:         "gym with trainer, doctor appointment, flatmate conversation, neighbour in hallway, parents evening",
+  professional:  "performance review, giving feedback, resolving team conflict, onboarding new hire, asking for time off",
+  social:        "chatting on a long flight, cooking class stranger, museum conversation, conference networking, language exchange meetup",
+  travel:        "hotel check-in, taxi ride, train ticket counter, customs officer, lost luggage desk",
+  services:      "phone repair counter, haircut at salon, bank advisor, returning faulty product at shop",
+  fitness:       "gym with trainer, running club, yoga class, sports physio, nutrition consult",
+  food:          "restaurant ordering, cafe, food market, cooking class, wine tasting",
+  education:     "study group, library, tutor session, class presentation, exam prep",
+  entertainment: "cinema, concert venue, art gallery, comedy club, escape room",
 };
 
 export async function POST(req: NextRequest) {
