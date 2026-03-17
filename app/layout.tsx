@@ -11,13 +11,13 @@ export const metadata: Metadata = {
     description: "Speak with an AI that plays the other person. Practice English or German through real scenarios.",
     type: "website",
     url: BASE_URL,
-    images: [{ url: `${BASE_URL}/opengraph-image`, width: 1200, height: 630, alt: "Fluent" }],
+    images: [{ url: `${BASE_URL}/opengraph-image?v=2`, width: 1200, height: 630, alt: "Fluent" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "Fluent — Practice real conversations",
     description: "Speak with an AI that plays the other person. Practice English or German through real scenarios.",
-    images: [`${BASE_URL}/opengraph-image`],
+    images: [`${BASE_URL}/opengraph-image?v=2`],
   },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
 };
