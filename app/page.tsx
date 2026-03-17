@@ -109,7 +109,14 @@ export default function Home() {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a2a" }}>Fluent</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a2a" }}>Fluent</div>
+            <button
+              onClick={() => { if (confirm("Clear all data and restart onboarding?")) { localStorage.clear(); router.push("/onboarding"); } }}
+              style={{ background: "transparent", border: "none", color: "#d4c9ff", fontSize: 16, cursor: "pointer", padding: 2, lineHeight: 1 }}
+              title="Reset"
+            >⚙️</button>
+          </div>
           {userName ? (
             <div style={{ color: "#1a1a2a", fontSize: 14, fontWeight: 600 }}>Hi, {userName} 👋</div>
           ) : (
