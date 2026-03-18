@@ -28,6 +28,7 @@ const ALL_THEMES_LIST = [
 
 export default function Home() {
   const router = useRouter();
+  const [ready, setReady] = useState(false);
   const [pendingTasks, setPendingTasks] = useState(0);
   const [totalXP, setTotalXP] = useState(340);
   const [generated, setGenerated] = useState<GeneratedTemplate[]>([]);
@@ -43,6 +44,7 @@ export default function Home() {
       router.push("/onboarding");
       return;
     }
+    setReady(true);
     const tasks = JSON.parse(localStorage.getItem("tasks") ?? "[]");
     setPendingTasks(tasks.filter((t: any) => t.status === "pending").length);
     setTotalXP(parseInt(localStorage.getItem("totalXP") ?? "340"));
@@ -103,6 +105,8 @@ export default function Home() {
     } catch {}
     setGenerating(null);
   }
+
+  if (!ready) return null;
 
   return (
     <div style={{ maxWidth: 600, margin: "0 auto", padding: "28px 20px 60px" }}>
