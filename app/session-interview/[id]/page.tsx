@@ -59,7 +59,7 @@ export default function InterviewSession() {
       if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
         audioCtxRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
       }
-      await audioCtxRef.current.resume();
+      await audioCtxRef.current!.resume();
     } catch {}
     timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     await askQuestion(0);

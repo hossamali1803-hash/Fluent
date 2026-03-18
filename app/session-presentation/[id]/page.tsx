@@ -152,7 +152,7 @@ export default function PresentationSession() {
       if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
         audioCtxRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
       }
-      await audioCtxRef.current.resume();
+      await audioCtxRef.current!.resume();
     } catch {}
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
