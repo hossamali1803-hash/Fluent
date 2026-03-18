@@ -102,8 +102,7 @@ export default function PresentationSession() {
         return;
       }
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
-      GlobalWorkerOptions.workerSrc =
-        "https://unpkg.com/pdfjs-dist@5.5.207/build/pdf.worker.min.mjs";
+      GlobalWorkerOptions.workerSrc = "/api/pdf-worker";
       const arrayBuffer = await file.arrayBuffer();
       const doc = await getDocument({ data: arrayBuffer }).promise;
       setPdfDoc(doc);
