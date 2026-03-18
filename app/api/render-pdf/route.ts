@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const data = new Uint8Array(arrayBuffer);
 
-    let canvas: any;
+    // Load @napi-rs/canvas for server-side canvas
     let createCanvas: any;
     try {
       ({ createCanvas } = require("@napi-rs/canvas"));
@@ -20,11 +20,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `canvas load failed: ${e}` }, { status: 500 });
     }
 
+    // Load pdfjs-dist — try several entry points
     let pdfjsLib: any;
-    try {
-      pdfjsLib = require("pdfjs-dist/legacy/build/pdf.js");
-    } catch (e) {
-      return NextResponse.json({ error: `pdfjs load failed: ${e}` }, { status: 500 });
+    const pdfPaths = [
+      "pdfjs-dist",
+      "pdfjs-dist/build/pdf.js",
+      "pdfjs-dist/build/pdf.min.js",
+    ];
+    for (const p of pdfPaths) {
+      try { pdfjsLib = require(p); break; } catch {}
+    }
+    if (!pdfjsLib) {
+      return NextResponse.json({ error: "pdfjs-dist not found" }, { status: 500 });
+    }
+
+    // Disable web worker — not available / not needed on the server
+    if (pdfjsLib.GlobalWorkerOptions) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "";
     }
 
     const pdf = await pdfjsLib.getDocument({
@@ -42,7 +54,7 @@ export async function POST(req: NextRequest) {
       const scale = Math.min(1280 / vp0.width, 1280 / vp0.height, 2);
       const viewport = page.getViewport({ scale });
 
-      canvas = createCanvas(Math.round(viewport.width), Math.round(viewport.height));
+      const canvas = createCanvas(Math.round(viewport.width), Math.round(viewport.height));
       const ctx = canvas.getContext("2d");
       await page.render({ canvasContext: ctx, viewport }).promise;
 
@@ -53,7 +65,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ images });
   } catch (err) {
     console.error("[render-pdf]", err);
-    // Return actual error so client can display it for debugging
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
