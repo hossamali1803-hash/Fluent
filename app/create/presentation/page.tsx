@@ -30,9 +30,9 @@ export default function CreatePresentationPage() {
     try {
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
 
-      // Use same-origin URL directly — pdfjs-dist 4.x creates module workers,
-      // so a same-origin path avoids all cross-origin restrictions on iOS Safari.
-      GlobalWorkerOptions.workerSrc = "/api/pdf-worker";
+      // Use static worker file committed to /public — guarantees exact version
+      // match with the bundled library, and avoids cross-origin restrictions.
+      GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
