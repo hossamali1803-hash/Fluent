@@ -106,7 +106,7 @@ export default function Home() {
     setGenerating(null);
   }
 
-  if (!ready) return null;
+  if (!ready) return <div style={{ minHeight: "100vh", background: "#f5f4ff" }} />;
 
   return (
     <div style={{ maxWidth: 600, margin: "0 auto", padding: "28px 20px 60px" }}>
