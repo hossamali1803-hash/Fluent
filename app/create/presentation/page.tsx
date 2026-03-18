@@ -25,12 +25,18 @@ export default function CreatePresentationPage() {
     setPdfFile(file);
     setPresentationFile(file);
     if (!title) setTitle(file.name.replace(/\.pdf$/i, ""));
-    // Count pages
+    // Count pages (no worker — avoids CDN hang)
     try {
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
-      GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.5.207/pdf.worker.min.mjs`;
+      GlobalWorkerOptions.workerSrc = "";
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await getDocument({ data: arrayBuffer }).promise;
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 5000)
+      );
+      const pdf: any = await Promise.race([
+        getDocument({ data: arrayBuffer, disableWorker: true } as any).promise,
+        timeout,
+      ]);
       setSlideCount(pdf.numPages);
     } catch { setSlideCount(null); }
     setLoadingPdf(false);
