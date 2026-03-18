@@ -116,19 +116,27 @@ export default function PresentationSession() {
   }
 
   const renderPage = useCallback(async (doc: any, pageNum: number) => {
-    if (!doc || !canvasRef.current) return;
+    if (!doc) return;
+    // Wait for canvas to be in the DOM
+    let canvas = canvasRef.current;
+    if (!canvas) {
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      canvas = canvasRef.current;
+    }
+    if (!canvas) return;
+
     if (renderTaskRef.current) {
       try { renderTaskRef.current.cancel(); } catch {}
     }
     setRenderingSlide(true);
     try {
       const page = await doc.getPage(pageNum);
-      const canvas = canvasRef.current;
-      const container = canvas.parentElement;
-      const maxW = container?.clientWidth ?? window.innerWidth;
-      const maxH = container?.clientHeight ?? window.innerHeight;
+      // Use window dimensions directly — reliable on mobile
+      const topBar = 52; const bottomBar = 60;
+      const maxW = window.innerWidth;
+      const maxH = window.innerHeight - topBar - bottomBar - 6;
       const vp0 = page.getViewport({ scale: 1 });
-      const scale = Math.min(maxW / vp0.width, maxH / vp0.height) * 0.98;
+      const scale = Math.min(maxW / vp0.width, maxH / vp0.height);
       const viewport = page.getViewport({ scale });
       canvas.width = viewport.width;
       canvas.height = viewport.height;
@@ -143,7 +151,10 @@ export default function PresentationSession() {
   }, []);
 
   useEffect(() => {
-    if (pdfDoc && phase === "presenting") renderPage(pdfDoc, currentSlide);
+    if (pdfDoc && phase === "presenting") {
+      // rAF ensures the PDF view is mounted and painted before we try to render
+      requestAnimationFrame(() => renderPage(pdfDoc, currentSlide));
+    }
   }, [pdfDoc, currentSlide, phase, renderPage]);
 
   function nextSlide() {
