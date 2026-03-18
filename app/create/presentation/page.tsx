@@ -6,7 +6,7 @@ import { setPresentationFile } from "@/lib/presentationFile";
 export default function CreatePresentationPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
-  const [targetMinutes, setTargetMinutes] = useState(5);
+  const [targetMinutes, setTargetMinutes] = useState(3);
   const [hasQA, setHasQA] = useState(true);
   const [qaCount, setQaCount] = useState(3);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
@@ -104,16 +104,17 @@ export default function CreatePresentationPage() {
       {/* Target time */}
       <div style={{ background: "#ffffff", borderRadius: 16, border: "1px solid #ece9ff", padding: "18px", marginBottom: 14, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
         <label style={labelStyle}>Target time</label>
-        <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 4 }}>
-          <input type="range" min={1} max={30} value={targetMinutes} onChange={(e) => setTargetMinutes(Number(e.target.value))} style={{ flex: 1, accentColor: "#f59e0b" }} />
-          <div style={{ background: "#fffbf0", border: "1px solid #fde68a", borderRadius: 10, padding: "6px 14px", minWidth: 60, textAlign: "center" }}>
-            <span style={{ color: "#f59e0b", fontWeight: 800, fontSize: 18 }}>{targetMinutes}</span>
-            <span style={{ color: "#6b6b8a", fontSize: 13 }}> min</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4 }}>
+          <button onClick={() => setTargetMinutes((m) => Math.max(1, m - 1))} style={{ width: 38, height: 38, borderRadius: 10, border: "1px solid #fde68a", background: "#fffbf0", color: "#f59e0b", fontSize: 20, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>−</button>
+          <div style={{ flex: 1, display: "flex", alignItems: "center", background: "#fffbf0", border: "1.5px solid #fde68a", borderRadius: 12, overflow: "hidden" }}>
+            <input
+              type="number" min={1} max={120} value={targetMinutes}
+              onChange={(e) => { const v = parseInt(e.target.value, 10); if (!isNaN(v)) setTargetMinutes(Math.max(1, Math.min(120, v))); }}
+              style={{ flex: 1, border: "none", outline: "none", background: "transparent", textAlign: "center", fontSize: 22, fontWeight: 800, color: "#f59e0b", padding: "8px 0", fontFamily: "inherit", MozAppearance: "textfield" } as React.CSSProperties}
+            />
+            <span style={{ color: "#6b6b8a", fontSize: 14, paddingRight: 14 }}>min</span>
           </div>
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 2 }}>
-          <span style={{ color: "#6b6b8a", fontSize: 11 }}>1 min</span>
-          <span style={{ color: "#6b6b8a", fontSize: 11 }}>30 min</span>
+          <button onClick={() => setTargetMinutes((m) => Math.min(120, m + 1))} style={{ width: 38, height: 38, borderRadius: 10, border: "1px solid #fde68a", background: "#fffbf0", color: "#f59e0b", fontSize: 20, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>+</button>
         </div>
       </div>
 

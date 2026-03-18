@@ -85,7 +85,11 @@ export default function PresentationSession() {
   // ── PDF ──────────────────────────────────────────────────────────────
   async function loadPdf(cfg: PresentationConfig) {
     const file = getPresentationFile();
-    if (!file) return;
+    if (!file) {
+      // File lost (page was refreshed) — fall back to no-PDF mode
+      setConfig({ ...cfg, hasPdf: false });
+      return;
+    }
     try {
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
       GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.5.207/pdf.worker.min.mjs`;
