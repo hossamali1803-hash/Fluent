@@ -1,4 +1,5 @@
 "use client";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const MODES = [
@@ -39,12 +40,29 @@ const MODES = [
 
 export default function Home() {
   const router = useRouter();
+
+  useEffect(() => {
+    if (!localStorage.getItem("onboardingDone")) {
+      router.push("/onboarding");
+    }
+  }, [router]);
+
+  function reset() {
+    if (confirm("Clear all data and restart onboarding?")) {
+      localStorage.clear();
+      router.push("/onboarding");
+    }
+  }
+
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 20px 60px" }}>
-      <div style={{ marginBottom: 36 }}>
-        <div style={{ fontSize: 26, fontWeight: 900, color: "#1a1a2a", marginBottom: 6 }}>Fluent</div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a2a", marginBottom: 4 }}>What are you practising?</div>
-        <div style={{ color: "#6b6b8a", fontSize: 14 }}>Choose a format to get started</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 36 }}>
+        <div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: "#1a1a2a", marginBottom: 6 }}>Fluent</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a2a", marginBottom: 4 }}>What are you practising?</div>
+          <div style={{ color: "#6b6b8a", fontSize: 14 }}>Choose a format to get started</div>
+        </div>
+        <button onClick={reset} title="Reset / restart onboarding" style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "#d4c9ff", padding: 4 }}>⚙️</button>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
