@@ -109,7 +109,8 @@ export default function Home() {
   if (!ready) return <div style={{ minHeight: "100vh", background: "#f5f4ff" }} />;
 
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto", padding: "28px 20px 60px" }}>
+    <div style={{ maxWidth: 600, margin: "0 auto", padding: "28px 20px 60px", animation: "fadeIn 0.2s ease" }}>
+      <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }`}</style>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 28 }}>
         <div>
