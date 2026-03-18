@@ -20,6 +20,7 @@ export default function PresentationSession() {
 
   // PDF state
   const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(1);
   const [totalSlides, setTotalSlides] = useState(0);
   const [renderingSlide, setRenderingSlide] = useState(false);
@@ -59,7 +60,10 @@ export default function PresentationSession() {
     if (raw) {
       const cfg = JSON.parse(raw) as PresentationConfig;
       setConfig(cfg);
-      if (cfg.hasPdf) loadPdf(cfg);
+      if (cfg.hasPdf) {
+        setPdfLoading(true);
+        loadPdf(cfg);
+      }
     }
   }, [id]);
 
@@ -86,8 +90,8 @@ export default function PresentationSession() {
   async function loadPdf(cfg: PresentationConfig) {
     const file = getPresentationFile();
     if (!file) {
-      // File lost (page was refreshed) — fall back to no-PDF mode
       setConfig({ ...cfg, hasPdf: false });
+      setPdfLoading(false);
       return;
     }
     try {
@@ -97,7 +101,12 @@ export default function PresentationSession() {
       const doc = await getDocument({ data: arrayBuffer }).promise;
       setPdfDoc(doc);
       setTotalSlides(doc.numPages);
-    } catch (e) { console.error("[loadPdf]", e); }
+    } catch (e) {
+      console.error("[loadPdf]", e);
+      // Any failure → fall back to no-PDF mode so user can still start
+      setConfig({ ...cfg, hasPdf: false });
+    }
+    setPdfLoading(false);
   }
 
   const renderPage = useCallback(async (doc: any, pageNum: number) => {
@@ -442,13 +451,12 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
         <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a2a", marginBottom: 6 }}>{config.title}</div>
         <div style={{ color: "#6b6b8a", fontSize: 14 }}>
           {config.targetMinutes} min{config.hasQA ? ` · ${config.qaCount} Q&A questions` : ""}
-          {config.hasPdf && !pdfDoc ? " · Loading slides..." : ""}
-          {pdfDoc ? ` · ${totalSlides} slides` : ""}
+          {pdfLoading ? " · Loading slides..." : pdfDoc ? ` · ${totalSlides} slides` : ""}
         </div>
       </div>
       <div style={{ background: "#fffbf0", borderRadius: 14, padding: "14px 18px", border: "1px solid #fde68a", width: "100%", boxSizing: "border-box" }}>
         <div style={{ color: "#6b6b8a", fontSize: 13, lineHeight: 1.7 }}>
-          {config.hasPdf ? (
+          {config.hasPdf && pdfDoc ? (
             <>📊 Your slides will appear full-screen<br />Use <strong>← →</strong> keys or buttons to navigate<br />Recording runs in the background</>
           ) : (
             <>Present for up to {config.targetMinutes} minutes<br />Click "Done" when finished{config.hasQA ? ` · Then ${config.qaCount} Q&A questions` : ""}</>
@@ -457,9 +465,9 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
       </div>
       <button
         onClick={beginPresenting}
-        disabled={config.hasPdf && !pdfDoc}
-        style={{ width: "100%", padding: "18px", borderRadius: 14, border: "none", background: config.hasPdf && !pdfDoc ? "#f0eeff" : "#f59e0b", color: config.hasPdf && !pdfDoc ? "#6b6b8a" : "#0f0e17", fontSize: 18, fontWeight: 800, cursor: config.hasPdf && !pdfDoc ? "default" : "pointer" }}
-      >{config.hasPdf && !pdfDoc ? "Loading slides..." : "Start presentation"}</button>
+        disabled={pdfLoading}
+        style={{ width: "100%", padding: "18px", borderRadius: 14, border: "none", background: pdfLoading ? "#f0eeff" : "#f59e0b", color: pdfLoading ? "#6b6b8a" : "#0f0e17", fontSize: 18, fontWeight: 800, cursor: pdfLoading ? "default" : "pointer" }}
+      >{pdfLoading ? "Loading slides..." : pdfDoc ? "Start with slides" : "Start presentation"}</button>
     </div>
   );
 
