@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface GeneratedTemplate {
@@ -25,6 +25,9 @@ export default function CreateConversationPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [scenario, setScenario] = useState<GeneratedTemplate | null>(null);
   const [error, setError] = useState("");
+
+  // Reset scenario on mount — iOS bfcache restores old React state when pressing back
+  useEffect(() => { setScenario(null); }, []);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
