@@ -50,7 +50,14 @@ export default function SessionPage() {
   }
 
   async function startSession() {
-    // Unlock audio playback on iOS — use playsinline to force speaker (not earpiece)
+    // Unlock audio during user gesture — required on both iOS and Android
+    try {
+      if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+        audioCtxRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
+      }
+      await audioCtxRef.current!.resume();
+    } catch {}
+    // iOS silence trick to force speaker routing
     const silence = document.createElement("audio");
     silence.setAttribute("playsinline", "");
     silence.src = "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhgCenp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6e//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjU0AAAAAAAAAAAAAAAAJAUHAAAAAAAAg4bNTQAA";
