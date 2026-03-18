@@ -28,34 +28,52 @@ export default function CreatePresentationPage() {
     if (!title) setTitle(file.name.replace(/\.pdf$/i, ""));
 
     try {
-      // Upload PDF to server for rendering — avoids all browser worker issues
-      const form = new FormData();
-      form.append("pdf", file);
-      setRenderProgress(1);
+      const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
 
-      const res = await fetch("/api/render-pdf", { method: "POST", body: form });
-      const json = await res.json();
-      if (!res.ok || json.error) throw new Error(json.error || `Server error ${res.status}`);
+      // Fetch worker from our own server (same-origin) and create a blob URL.
+      // This avoids cross-origin worker restrictions on iOS Safari.
+      try {
+        const res = await fetch("/api/pdf-worker");
+        if (res.ok) {
+          const script = await res.text();
+          const blob = new Blob([script], { type: "application/javascript" });
+          GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+        }
+      } catch {}
 
-      const total = json.images.length;
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+      const total = pdf.numPages;
       setSlideCount(total);
 
-      // Convert base64 images to blobs and store in IndexedDB
       const blobs: Blob[] = [];
-      for (let i = 0; i < json.images.length; i++) {
-        setRenderProgress(i + 1);
-        const binary = atob(json.images[i]);
-        const bytes = new Uint8Array(binary.length);
-        for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
-        blobs.push(new Blob([bytes], { type: "image/jpeg" }));
+      const offscreen = document.createElement("canvas");
+
+      for (let p = 1; p <= total; p++) {
+        setRenderProgress(p);
+        const page = await pdf.getPage(p);
+        const vp0 = page.getViewport({ scale: 1 });
+        const scale = Math.min(1280 / vp0.width, 720 / vp0.height);
+        const vp = page.getViewport({ scale });
+        offscreen.width = Math.round(vp.width);
+        offscreen.height = Math.round(vp.height);
+        const ctx = offscreen.getContext("2d")!;
+        ctx.clearRect(0, 0, offscreen.width, offscreen.height);
+        await (page.render({ canvasContext: ctx, viewport: vp }) as any).promise;
+        const blob = await new Promise<Blob>((res, rej) =>
+          offscreen.toBlob((b) => b ? res(b) : rej(new Error("toBlob")), "image/jpeg", 0.85)
+        );
+        blobs.push(blob);
       }
+
       await saveSlideImages(blobs);
     } catch (err) {
-      console.error("[PDF render]", err);
-      setFileError(err instanceof Error ? err.message : "Could not process PDF.");
+      console.error("[PDF]", err);
+      setFileError("Could not process PDF — try a different file.");
       setPdfFile(null);
       setSlideCount(null);
     }
+
     setLoadingPdf(false);
     setRenderProgress(0);
   }
@@ -82,8 +100,8 @@ export default function CreatePresentationPage() {
 
   const loadingLabel = loadingPdf
     ? (slideCount && renderProgress > 0
-        ? `Saving slide ${renderProgress} / ${slideCount}…`
-        : "Uploading & rendering PDF…")
+        ? `Rendering slide ${renderProgress} / ${slideCount}…`
+        : "Loading PDF…")
     : null;
 
   return (
@@ -115,7 +133,7 @@ export default function CreatePresentationPage() {
                 <button onClick={removePdf} style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: 18, cursor: "pointer" }}>✕</button>
               )}
             </div>
-            {loadingPdf && slideCount && (
+            {loadingPdf && slideCount && slideCount > 0 && (
               <div style={{ marginTop: 10 }}>
                 <div style={{ background: "#e6f7f1", borderRadius: 99, height: 6 }}>
                   <div style={{ background: "#10b981", borderRadius: 99, height: 6, width: `${(renderProgress / slideCount) * 100}%`, transition: "width 0.3s" }} />
