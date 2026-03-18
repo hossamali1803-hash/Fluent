@@ -30,19 +30,9 @@ export default function CreatePresentationPage() {
     try {
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
 
-      // Try to set up worker: fetch script → blob URL → fake worker fallback
-      try {
-        const res = await fetch("/api/pdf-worker");
-        if (res.ok) {
-          const script = await res.text();
-          const blob = new Blob([script], { type: "text/javascript" });
-          GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
-        } else {
-          GlobalWorkerOptions.workerSrc = "";
-        }
-      } catch {
-        GlobalWorkerOptions.workerSrc = "";
-      }
+      // pdfjs-dist 4.x uses a classic (non-module) worker — CDN URL works reliably
+      GlobalWorkerOptions.workerSrc =
+        "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js";
 
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await getDocument({ data: arrayBuffer } as any).promise;
