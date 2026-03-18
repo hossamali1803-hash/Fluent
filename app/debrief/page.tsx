@@ -17,6 +17,7 @@ interface Debrief {
   summary: string;
   templateName: string;
   durationSeconds: number;
+  sessionType: string;
 }
 
 const SCORE_COLOR = (v: number) => v >= 75 ? "#10b981" : v >= 55 ? "#f59e0b" : "#ef4444";
@@ -52,7 +53,7 @@ export default function DebriefPage() {
           }));
           localStorage.setItem("tasks", JSON.stringify([...newTasks, ...existing]));
         }
-        setD({ ...data, templateName, durationSeconds });
+        setD({ ...data, templateName, durationSeconds, sessionType: templateId ?? "" });
       })
       .catch(() => setError("Something went wrong."));
   }, []);
@@ -163,7 +164,14 @@ export default function DebriefPage() {
 
       <button onClick={() => router.push("/tasks")} style={btnStyle("#8b5cf6")}>Go to my tasks →</button>
       <div style={{ height: 12 }} />
-      <button onClick={() => router.push("/")} style={btnStyle("#ffffff", "#ece9ff", "#1a1a2a")}>Practice again</button>
+      {d.sessionType === "interview" && (
+        <button onClick={() => router.push("/create/interview")} style={btnStyle("#10b981")}>Redo interview →</button>
+      )}
+      {d.sessionType === "presentation" && (
+        <button onClick={() => router.push("/create/presentation")} style={btnStyle("#f59e0b", undefined, "#0f0e17")}>Redo presentation →</button>
+      )}
+      <div style={{ height: 12 }} />
+      <button onClick={() => router.push("/")} style={btnStyle("#ffffff", "#ece9ff", "#1a1a2a")}>Back to home</button>
     </div>
   );
 }

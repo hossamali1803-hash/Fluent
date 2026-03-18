@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
-type Status = "ready" | "asking" | "listening" | "processing" | "done";
+type Status = "ready" | "countdown" | "asking" | "listening" | "processing" | "done";
 
 interface InterviewConfig {
   id: string; title: string; questions: string[]; language: string;
@@ -19,6 +19,8 @@ export default function InterviewSession() {
   const [elapsed, setElapsed] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState("");
+
+  const [countdown, setCountdown] = useState(3);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -45,6 +47,13 @@ export default function InterviewSession() {
     cleanup();
   }, []);
 
+  useEffect(() => {
+    if (status !== "countdown") return;
+    if (countdown <= 0) { begin(); return; }
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [status, countdown]);
+
   function cleanup() {
     if (timerRef.current) clearInterval(timerRef.current);
     if (vadTimerRef.current) clearTimeout(vadTimerRef.current);
@@ -52,6 +61,21 @@ export default function InterviewSession() {
     try { audioSourceRef.current?.stop(); } catch {}
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
     try { mediaRecorderRef.current?.stop(); } catch {}
+  }
+
+  function startCountdown() {
+    const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+      audioCtxRef.current = new AC();
+    }
+    audioCtxRef.current!.resume().then(() => {
+      const ctx = audioCtxRef.current!;
+      const silent = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = silent; src.connect(ctx.destination); src.start(0);
+    }).catch(() => {});
+    setCountdown(3);
+    setStatus("countdown");
   }
 
   async function begin() {
@@ -273,9 +297,20 @@ export default function InterviewSession() {
         </div>
       </div>
       <button
-        onClick={begin}
+        onClick={startCountdown}
         style={{ width: "100%", padding: "18px", borderRadius: 14, border: "none", background: "#10b981", color: "#ffffff", fontSize: 18, fontWeight: 800, cursor: "pointer" }}
       >Begin interview</button>
+    </div>
+  );
+
+  // ── COUNTDOWN ──
+  if (status === "countdown") return (
+    <div style={{ display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#f0fdf9", alignItems: "center", justifyContent: "center" }}>
+      <div key={countdown} style={{ fontSize: 120, fontWeight: 900, color: "#10b981", lineHeight: 1, animation: "pop 0.4s ease" }}>
+        {countdown === 0 ? "Go!" : countdown}
+      </div>
+      <div style={{ color: "#6b6b8a", fontSize: 18, marginTop: 20 }}>Get ready to answer</div>
+      <style>{`@keyframes pop { from { transform: scale(1.4); opacity: 0.5 } to { transform: scale(1); opacity: 1 } }`}</style>
     </div>
   );
 

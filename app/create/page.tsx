@@ -1,81 +1,9 @@
 "use client";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-
-const MODES = [
-  {
-    key: "conversation",
-    emoji: "💬",
-    title: "Conversation",
-    desc: "Practice a real-life dialogue — any situation, any person",
-    examples: "Salary negotiation · Doctor visit · Client call",
-    href: "/create/conversation",
-    accent: "#8b5cf6",
-    bg: "#f5f4ff",
-    border: "#d4c9ff",
-  },
-  {
-    key: "presentation",
-    emoji: "🎤",
-    title: "Presentation",
-    desc: "Deliver a timed talk with an optional Q&A session after",
-    examples: "Set your target time · Choose if you want follow-up questions",
-    href: "/create/presentation",
-    accent: "#f59e0b",
-    bg: "#fffbf0",
-    border: "#fde68a",
-  },
-  {
-    key: "interview",
-    emoji: "🎯",
-    title: "Interview",
-    desc: "Practice interview questions one by one at your own pace",
-    examples: "Generate questions · Or write your own",
-    href: "/create/interview",
-    accent: "#10b981",
-    bg: "#f0fdf9",
-    border: "#a7f3d0",
-  },
-];
 
 export default function CreatePage() {
   const router = useRouter();
-  return (
-    <div style={{ maxWidth: 560, margin: "0 auto", padding: "28px 20px 60px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
-        <button
-          onClick={() => router.push("/")}
-          style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "#6b6b8a", padding: "0 4px 0 0" }}
-        >←</button>
-        <div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "#1a1a2a" }}>What are you practising?</div>
-          <div style={{ color: "#6b6b8a", fontSize: 13 }}>Choose a format to get started</div>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {MODES.map((m) => (
-          <button
-            key={m.key}
-            onClick={() => router.push(m.href)}
-            style={{
-              width: "100%", background: m.bg, border: `1.5px solid ${m.border}`,
-              borderRadius: 20, padding: "22px 20px", cursor: "pointer",
-              display: "flex", alignItems: "flex-start", gap: 18, textAlign: "left",
-              boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
-            }}
-          >
-            <div style={{ width: 52, height: 52, borderRadius: 16, background: "#ffffff", border: `1.5px solid ${m.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, flexShrink: 0 }}>
-              {m.emoji}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 17, fontWeight: 800, color: "#1a1a2a", marginBottom: 4 }}>{m.title}</div>
-              <div style={{ fontSize: 14, color: "#6b6b8a", lineHeight: 1.4, marginBottom: 8 }}>{m.desc}</div>
-              <div style={{ fontSize: 12, color: m.accent, fontWeight: 600 }}>{m.examples}</div>
-            </div>
-            <span style={{ color: m.accent, fontSize: 20, paddingTop: 2, flexShrink: 0 }}>→</span>
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+  useEffect(() => { router.replace("/"); }, [router]);
+  return null;
 }

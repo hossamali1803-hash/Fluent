@@ -99,7 +99,7 @@ export default function CreateConversationPage() {
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "24px 20px 60px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
-        <button onClick={() => router.push("/create")} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "#6b6b8a", padding: "0 4px 0 0" }}>←</button>
+        <button onClick={() => router.push("/")} style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "#6b6b8a", padding: "0 4px 0 0" }}>←</button>
         <div>
           <div style={{ fontSize: 20, fontWeight: 800, color: "#1a1a2a" }}>💬 Conversation</div>
           <div style={{ color: "#6b6b8a", fontSize: 13 }}>Describe the situation — we'll build it</div>

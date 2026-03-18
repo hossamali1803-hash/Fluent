@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getAllSlideUrls, clearSlides } from "@/lib/presentationFile";
 
-type Phase = "ready" | "presenting" | "transcribing" | "qa" | "done";
+type Phase = "ready" | "countdown" | "presenting" | "transcribing" | "qa" | "done";
 type QAStatus = "speaking" | "listening" | "processing";
 interface Message { id: string; role: "user" | "assistant"; content: string; }
 interface PresentationConfig {
@@ -33,6 +33,8 @@ export default function PresentationSession() {
   const [qaStatus, setQaStatus] = useState<QAStatus>("speaking");
   const [qaElapsed, setQaElapsed] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState("");
+
+  const [countdown, setCountdown] = useState(3);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const qaTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -86,6 +88,18 @@ export default function PresentationSession() {
     return () => window.removeEventListener("keydown", onKey);
   }, [phase, slideUrls.length]);
 
+  // Countdown tick
+  useEffect(() => {
+    if (phase !== "countdown") return;
+    if (countdown <= 0) { beginPresenting(); return; }
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, countdown]);
+
+  function stripMd(text: string): string {
+    return text.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*(.*?)\*/g, "$1").replace(/^#{1,6}\s+/gm, "").trim();
+  }
+
   // ── CLEANUP ─────────────────────────────────────────────────────────
   function cleanup() {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -99,6 +113,21 @@ export default function PresentationSession() {
   }
 
   // ── PRESENT ─────────────────────────────────────────────────────────
+  function startCountdown() {
+    const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+      audioCtxRef.current = new AC();
+    }
+    audioCtxRef.current!.resume().then(() => {
+      const ctx = audioCtxRef.current!;
+      const silent = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = silent; src.connect(ctx.destination); src.start(0);
+    }).catch(() => {});
+    setCountdown(3);
+    setPhase("countdown");
+  }
+
   async function beginPresenting() {
     try {
       if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
@@ -203,7 +232,8 @@ export default function PresentationSession() {
     const systemPrompt = `You are an engaged audience member conducting Q&A after a presentation titled "${config?.title}".
 The speaker said: <<<${presentationText.slice(0, 2000)}>>>${slideContext}
 Ask exactly ${config?.qaCount ?? 3} insightful follow-up questions based on both what the speaker said AND the slide content, one at a time.
-Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} questions have been answered, say: "Thank you for your presentation. Great job."`;
+Keep each question concise (under 20 words). Write in plain text only — no markdown, no asterisks, no bold, no bullet points.
+After all ${config?.qaCount ?? 3} questions have been answered, say exactly: "Thank you for your presentation. Great job."`;
 
     try {
       const res = await fetch("/api/conversation/turn", {
@@ -212,11 +242,12 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
         body: JSON.stringify({ userMessage: "Please begin the Q&A.", history: [], templateId: "presentation", systemPrompt, turnNumber: 1, language: config?.language ?? "en" }),
       });
       const data = await res.json();
-      const msg: Message = { id: "qa-0", role: "assistant", content: data.text };
+      const cleanText = stripMd(data.text ?? "");
+      const msg: Message = { id: "qa-0", role: "assistant", content: cleanText };
       setQaMessages([msg]);
-      qaHistoryRef.current = [{ role: "assistant", content: data.text }];
+      qaHistoryRef.current = [{ role: "assistant", content: cleanText }];
       qaTurnRef.current = 1;
-      await playAudio(data.audioBase64, data.text);
+      await playAudio(data.audioBase64, cleanText);
     } catch { endQA(); }
   }
 
@@ -333,7 +364,8 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
     const systemPrompt = `You are an engaged audience member conducting Q&A after a presentation titled "${config?.title}".
 The speaker said: <<<${transcript.slice(0, 2000)}>>>${slideContext}
 Ask exactly ${config?.qaCount ?? 3} insightful follow-up questions based on both what the speaker said AND the slide content, one at a time.
-Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} questions have been answered, say: "Thank you for your presentation. Great job."`;
+Keep each question concise (under 20 words). Write in plain text only — no markdown, no asterisks, no bold, no bullet points.
+After all ${config?.qaCount ?? 3} questions have been answered, say exactly: "Thank you for your presentation. Great job."`;
 
     try {
       const res = await fetch("/api/conversation/turn", {
@@ -342,10 +374,11 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
         body: JSON.stringify({ userMessage: userText, history: qaHistoryRef.current.slice(0, -1), templateId: "presentation", systemPrompt, turnNumber: qaTurnRef.current, language: config?.language ?? "en" }),
       });
       const data = await res.json();
-      const aiMsg: Message = { id: `a-${Date.now()}`, role: "assistant", content: data.text };
+      const cleanText = stripMd(data.text ?? "");
+      const aiMsg: Message = { id: `a-${Date.now()}`, role: "assistant", content: cleanText };
       setQaMessages((prev) => [...prev, aiMsg]);
-      qaHistoryRef.current = [...qaHistoryRef.current, { role: "assistant", content: data.text }];
-      const isDone = data.text?.toLowerCase().includes("thank you for your presentation");
+      qaHistoryRef.current = [...qaHistoryRef.current, { role: "assistant", content: cleanText }];
+      const isDone = cleanText.toLowerCase().includes("thank you for your presentation");
       if (isDone) {
         await new Promise<void>(async (resolve) => {
           if (data.audioBase64) {
@@ -364,7 +397,7 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
         });
         endQA();
       } else {
-        await playAudio(data.audioBase64, data.text);
+        await playAudio(data.audioBase64, cleanText);
       }
     } catch { endQA(); }
   }
@@ -414,10 +447,21 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
         </div>
       </div>
       <button
-        onClick={beginPresenting}
+        onClick={startCountdown}
         disabled={slidesLoading}
         style={{ width: "100%", padding: "18px", borderRadius: 14, border: "none", background: slidesLoading ? "#f0eeff" : "#f59e0b", color: slidesLoading ? "#6b6b8a" : "#0f0e17", fontSize: 18, fontWeight: 800, cursor: slidesLoading ? "default" : "pointer" }}
       >{slidesLoading ? "Loading slides…" : totalSlides > 0 ? "Start with slides" : "Start presentation"}</button>
+    </div>
+  );
+
+  // ── COUNTDOWN ────────────────────────────────────────────────────────
+  if (phase === "countdown") return (
+    <div style={{ display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#0f0e17", alignItems: "center", justifyContent: "center" }}>
+      <div key={countdown} style={{ fontSize: 120, fontWeight: 900, color: "#f59e0b", lineHeight: 1, animation: "pop 0.4s ease" }}>
+        {countdown === 0 ? "Go!" : countdown}
+      </div>
+      <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 18, marginTop: 20 }}>Get ready to present</div>
+      <style>{`@keyframes pop { from { transform: scale(1.4); opacity: 0.5 } to { transform: scale(1); opacity: 1 } }`}</style>
     </div>
   );
 
