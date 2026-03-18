@@ -53,7 +53,7 @@ export default function CreatePresentationPage() {
       await saveSlideImages(blobs);
     } catch (err) {
       console.error("[PDF render]", err);
-      setFileError("Could not process PDF. Please try a different file.");
+      setFileError(err instanceof Error ? err.message : "Could not process PDF.");
       setPdfFile(null);
       setSlideCount(null);
     }
