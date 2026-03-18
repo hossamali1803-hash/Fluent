@@ -104,7 +104,12 @@ export default function PresentationSession() {
       if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
         audioCtxRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
       }
-      await audioCtxRef.current!.resume();
+      const ctx = audioCtxRef.current!;
+      await ctx.resume();
+      // Play silent buffer in gesture handler to unlock iOS audio session
+      const silent = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = silent; src.connect(ctx.destination); src.start(0);
     } catch {}
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -192,9 +197,12 @@ export default function PresentationSession() {
     qaTimerRef.current = setInterval(() => setQaElapsed((s) => s + 1), 1000);
     setQaStatus("speaking");
 
+    const slideText = localStorage.getItem("presentationSlideText") ?? "";
+    const slideContext = slideText ? `\n\nThe presentation slides contain:\n<<<${slideText.slice(0, 2000)}>>>` : "";
+
     const systemPrompt = `You are an engaged audience member conducting Q&A after a presentation titled "${config?.title}".
-The speaker said: <<<${presentationText.slice(0, 3000)}>>>
-Ask exactly ${config?.qaCount ?? 3} insightful follow-up questions based on the presentation, one at a time.
+The speaker said: <<<${presentationText.slice(0, 2000)}>>>${slideContext}
+Ask exactly ${config?.qaCount ?? 3} insightful follow-up questions based on both what the speaker said AND the slide content, one at a time.
 Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} questions have been answered, say: "Thank you for your presentation. Great job."`;
 
     try {
@@ -215,7 +223,8 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
   async function playAudio(base64: string, text?: string): Promise<void> {
     return new Promise(async (resolve) => {
       setQaStatus("speaking");
-      const done = () => { resolve(); if (sessionActiveRef.current) startQAListening(); };
+      const timeout = setTimeout(() => { done(); }, 20_000);
+      const done = () => { clearTimeout(timeout); resolve(); if (sessionActiveRef.current) startQAListening(); };
       if (base64) {
         try {
           if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
@@ -319,9 +328,11 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
     qaHistoryRef.current = [...qaHistoryRef.current, { role: "user", content: userText }];
     qaTurnRef.current += 1;
 
+    const slideText = localStorage.getItem("presentationSlideText") ?? "";
+    const slideContext = slideText ? `\n\nThe presentation slides contain:\n<<<${slideText.slice(0, 2000)}>>>` : "";
     const systemPrompt = `You are an engaged audience member conducting Q&A after a presentation titled "${config?.title}".
-The speaker said: <<<${transcript.slice(0, 3000)}>>>
-Ask exactly ${config?.qaCount ?? 3} insightful follow-up questions, one at a time.
+The speaker said: <<<${transcript.slice(0, 2000)}>>>${slideContext}
+Ask exactly ${config?.qaCount ?? 3} insightful follow-up questions based on both what the speaker said AND the slide content, one at a time.
 Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} questions have been answered, say: "Thank you for your presentation. Great job."`;
 
     try {

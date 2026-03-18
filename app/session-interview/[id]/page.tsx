@@ -59,7 +59,15 @@ export default function InterviewSession() {
       if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
         audioCtxRef.current = new ((window as any).AudioContext || (window as any).webkitAudioContext)();
       }
-      await audioCtxRef.current!.resume();
+      const ctx = audioCtxRef.current!;
+      await ctx.resume();
+      // iOS Safari requires actual audio playback within the gesture handler to unlock
+      // the audio session — just calling resume() is not enough.
+      const silent = ctx.createBuffer(1, 1, 22050);
+      const src = ctx.createBufferSource();
+      src.buffer = silent;
+      src.connect(ctx.destination);
+      src.start(0);
     } catch {}
     timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
     await askQuestion(0);
@@ -88,6 +96,10 @@ export default function InterviewSession() {
 
   function playAudio(base64: string, fallbackText?: string): Promise<void> {
     return new Promise(async (resolve) => {
+      // Safety net: never hang longer than 20s waiting for audio to end
+      const timeout = setTimeout(() => resolve(), 20_000);
+      const done = () => { clearTimeout(timeout); resolve(); };
+
       if (base64) {
         try {
           if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
@@ -102,12 +114,12 @@ export default function InterviewSession() {
           const source = ctx.createBufferSource();
           audioSourceRef.current = source;
           source.buffer = buffer; source.connect(ctx.destination);
-          source.onended = () => resolve(); source.start(0);
+          source.onended = done; source.start(0);
           return;
         } catch {}
       }
       if (fallbackText) await speakText(fallbackText);
-      resolve();
+      done();
     });
   }
 

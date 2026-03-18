@@ -40,11 +40,20 @@ export default function CreatePresentationPage() {
       setSlideCount(total);
 
       const blobs: Blob[] = [];
+      const pageTexts: string[] = [];
       const offscreen = document.createElement("canvas");
 
       for (let p = 1; p <= total; p++) {
         setRenderProgress(p);
         const page = await pdf.getPage(p);
+
+        // Extract text content for Q&A context
+        try {
+          const textContent = await page.getTextContent();
+          const pageText = (textContent.items as any[]).map((item) => item.str ?? "").join(" ").trim();
+          if (pageText) pageTexts.push(`[Slide ${p}] ${pageText}`);
+        } catch {}
+
         const vp0 = page.getViewport({ scale: 1 });
         const scale = Math.min(1280 / vp0.width, 720 / vp0.height);
         const vp = page.getViewport({ scale });
@@ -60,6 +69,10 @@ export default function CreatePresentationPage() {
       }
 
       await saveSlideImages(blobs);
+      // Store slide text so Q&A can reference PDF content
+      if (pageTexts.length > 0) {
+        localStorage.setItem("presentationSlideText", pageTexts.join("\n"));
+      }
     } catch (err) {
       console.error("[PDF]", err);
       const msg = err instanceof Error ? err.message : String(err);
@@ -77,6 +90,7 @@ export default function CreatePresentationPage() {
     setSlideCount(null);
     if (fileRef.current) fileRef.current.value = "";
     clearSlides();
+    localStorage.removeItem("presentationSlideText");
   }
 
   function start() {
