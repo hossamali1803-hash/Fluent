@@ -34,9 +34,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "pdfjs-dist not found" }, { status: 500 });
     }
 
-    // Disable web worker — not available / not needed on the server
+    // Point to the worker file so pdfjs-dist can spawn a Node.js worker thread
     if (pdfjsLib.GlobalWorkerOptions) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+      const { pathToFileURL } = require("url");
+      let workerPath: string | null = null;
+      for (const wp of [
+        "pdfjs-dist/build/pdf.worker.min.js",
+        "pdfjs-dist/build/pdf.worker.js",
+        "pdfjs-dist/build/pdf.worker.min.mjs",
+        "pdfjs-dist/build/pdf.worker.mjs",
+      ]) {
+        try { workerPath = require.resolve(wp); break; } catch {}
+      }
+      if (workerPath) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).toString();
+      }
     }
 
     const pdf = await pdfjsLib.getDocument({
