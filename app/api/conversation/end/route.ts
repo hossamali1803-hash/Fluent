@@ -5,8 +5,9 @@ import { TEMPLATES } from "@/lib/templates";
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(req: NextRequest) {
-  const { history, templateId, durationSeconds, language } = await req.json();
+  const { history, templateId, templateName: passedName, durationSeconds, language } = await req.json();
   const template = TEMPLATES.find((t) => t.id === templateId) ?? TEMPLATES[0];
+  const scenarioName = passedName ?? template.name;
 
   const userMessages = history.filter((m: { role: string }) => m.role === "user").map((m: { content: string }) => m.content).join("\n");
 
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
   const practiceLang = language && language !== "en" ? (langNames[language] ?? language) : "English";
   const analysisPrompt = `You are an expert ${practiceLang} speaking coach analyzing a conversation session for a non-native ${practiceLang} speaker. Write ALL text fields (why, cue, title, feedback) in English.
 
-Scenario: "${template.name}"
+Scenario: "${scenarioName}"
 Duration: ${Math.round(durationSeconds / 60)} minutes
 Full conversation (user turns only):
 ${userMessages}
