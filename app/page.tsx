@@ -46,6 +46,7 @@ const MODES = [
 export default function Home() {
   const router = useRouter();
   const [language, setLanguage] = useState("en");
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem("onboardingDone")) {
@@ -60,11 +61,9 @@ export default function Home() {
     localStorage.setItem("practiceLanguage", code);
   }
 
-  function reset() {
-    if (confirm("Clear all data and restart onboarding?")) {
-      localStorage.clear();
-      router.push("/onboarding");
-    }
+  function doReset() {
+    localStorage.clear();
+    router.push("/onboarding");
   }
 
   return (
@@ -75,8 +74,19 @@ export default function Home() {
           <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a2a", marginBottom: 4 }}>What are you practising?</div>
           <div style={{ color: "#6b6b8a", fontSize: 14 }}>Choose a format to get started</div>
         </div>
-        <button onClick={reset} title="Reset / restart onboarding" style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "#d4c9ff", padding: 4 }}>⚙️</button>
+        <button onClick={() => setConfirmReset(true)} title="Reset" style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "#d4c9ff", padding: 4 }}>⚙️</button>
       </div>
+
+      {/* Inline reset confirmation — replaces confirm() which is blocked on iOS PWA */}
+      {confirmReset && (
+        <div style={{ background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 14, padding: "16px 18px", marginBottom: 20, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ color: "#1a1a2a", fontSize: 14, fontWeight: 600 }}>Reset all data?</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setConfirmReset(false)} style={{ background: "transparent", border: "1px solid #ece9ff", borderRadius: 10, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: "#6b6b8a", fontWeight: 600 }}>Cancel</button>
+            <button onClick={doReset} style={{ background: "#ef4444", border: "none", borderRadius: 10, padding: "6px 14px", cursor: "pointer", fontSize: 13, color: "#ffffff", fontWeight: 700 }}>Reset</button>
+          </div>
+        </div>
+      )}
 
       {/* Language picker */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>

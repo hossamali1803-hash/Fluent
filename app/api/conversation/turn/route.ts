@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   const langInstruction = `\n\nLANGUAGE RULE: You must respond ONLY in ${langName}. Never translate, never switch languages, never repeat the user's words in another language. Regardless of what language the user writes in, your reply is always ${langName} only.`;
   const systemPrompt = `${basePrompt}${langInstruction}
 
-STRICT RULE: Every question you ask must be directly about the current situation and scenario. Never ask about weekend plans, week plans, what the student is doing later, or anything unrelated to this specific scenario. Stay 100% in character and in the moment.`;
+Stay 100% in character and focused on the current scenario at all times.`;
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
