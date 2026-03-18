@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { setPresentationFile } from "@/lib/presentationFile";
+import { setPresentationFile, clearPresentationFile } from "@/lib/presentationFile";
 
 export default function CreatePresentationPage() {
   const router = useRouter();
@@ -23,20 +23,15 @@ export default function CreatePresentationPage() {
     if (file.size > 50_000_000) { setFileError("File too large (max 50 MB)."); return; }
     setLoadingPdf(true);
     setPdfFile(file);
-    setPresentationFile(file);
+    await setPresentationFile(file);
     if (!title) setTitle(file.name.replace(/\.pdf$/i, ""));
-    // Count pages (no worker — avoids CDN hang)
+    // Count pages
     try {
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
-      GlobalWorkerOptions.workerSrc = "";
+      GlobalWorkerOptions.workerSrc =
+        "https://unpkg.com/pdfjs-dist@5.5.207/build/pdf.worker.min.mjs";
       const arrayBuffer = await file.arrayBuffer();
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 5000)
-      );
-      const pdf: any = await Promise.race([
-        getDocument({ data: arrayBuffer, disableWorker: true } as any).promise,
-        timeout,
-      ]);
+      const pdf = await getDocument({ data: arrayBuffer }).promise;
       setSlideCount(pdf.numPages);
     } catch { setSlideCount(null); }
     setLoadingPdf(false);
@@ -46,6 +41,7 @@ export default function CreatePresentationPage() {
     setPdfFile(null);
     setSlideCount(null);
     if (fileRef.current) fileRef.current.value = "";
+    clearPresentationFile();
   }
 
   function start() {

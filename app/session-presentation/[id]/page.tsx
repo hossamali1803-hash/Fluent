@@ -72,7 +72,7 @@ export default function PresentationSession() {
   useEffect(() => () => {
     sessionActiveRef.current = false;
     cleanup();
-    clearPresentationFile();
+    clearPresentationFile(); // async, fire-and-forget on unmount
   }, []);
 
   // Keyboard navigation
@@ -88,31 +88,26 @@ export default function PresentationSession() {
 
   // ── PDF ──────────────────────────────────────────────────────────────
   async function loadPdf(cfg: PresentationConfig) {
-    const file = getPresentationFile();
-    if (!file) {
-      setConfig({ ...cfg, hasPdf: false });
-      setPdfLoading(false);
-      return;
-    }
-    // Safety net: never block the start button for more than 6 seconds
+    // Safety net: never block the start button for more than 10 seconds
     const giveUp = setTimeout(() => {
       setConfig((c) => c ? { ...c, hasPdf: false } : c);
       setPdfLoading(false);
-    }, 6000);
+    }, 10000);
     try {
+      const file = await getPresentationFile();
+      if (!file) {
+        setConfig({ ...cfg, hasPdf: false });
+        clearTimeout(giveUp);
+        setPdfLoading(false);
+        return;
+      }
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
-      // Use the legacy build which runs without a separate worker
-      GlobalWorkerOptions.workerSrc = "";
+      GlobalWorkerOptions.workerSrc =
+        "https://unpkg.com/pdfjs-dist@5.5.207/build/pdf.worker.min.mjs";
       const arrayBuffer = await file.arrayBuffer();
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 5000)
-      );
-      const doc = await Promise.race([
-        getDocument({ data: arrayBuffer, disableWorker: true } as any).promise,
-        timeout,
-      ]);
+      const doc = await getDocument({ data: arrayBuffer }).promise;
       setPdfDoc(doc);
-      setTotalSlides((doc as any).numPages);
+      setTotalSlides(doc.numPages);
     } catch (e) {
       console.error("[loadPdf]", e);
       setConfig((c) => c ? { ...c, hasPdf: false } : c);
