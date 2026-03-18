@@ -1,6 +1,11 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+const LANGUAGES = [
+  { code: "en", flag: "🇬🇧", label: "English" },
+  { code: "de", flag: "🇩🇪", label: "German" },
+];
 
 const MODES = [
   {
@@ -40,12 +45,20 @@ const MODES = [
 
 export default function Home() {
   const router = useRouter();
+  const [language, setLanguage] = useState("en");
 
   useEffect(() => {
     if (!localStorage.getItem("onboardingDone")) {
       router.push("/onboarding");
+      return;
     }
+    setLanguage(localStorage.getItem("practiceLanguage") ?? "en");
   }, [router]);
+
+  function selectLanguage(code: string) {
+    setLanguage(code);
+    localStorage.setItem("practiceLanguage", code);
+  }
 
   function reset() {
     if (confirm("Clear all data and restart onboarding?")) {
@@ -63,6 +76,18 @@ export default function Home() {
           <div style={{ color: "#6b6b8a", fontSize: 14 }}>Choose a format to get started</div>
         </div>
         <button onClick={reset} title="Reset / restart onboarding" style={{ background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "#d4c9ff", padding: 4 }}>⚙️</button>
+      </div>
+
+      {/* Language picker */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 28 }}>
+        <span style={{ color: "#6b6b8a", fontSize: 13, fontWeight: 600 }}>Practising:</span>
+        <div style={{ display: "flex", background: "#f0eeff", borderRadius: 20, padding: 3, gap: 2 }}>
+          {LANGUAGES.map((l) => (
+            <button key={l.code} onClick={() => selectLanguage(l.code)} style={{ background: language === l.code ? "#ffffff" : "transparent", border: language === l.code ? "1px solid #d4c9ff" : "1px solid transparent", borderRadius: 16, padding: "5px 14px", cursor: "pointer", fontSize: 13, fontWeight: language === l.code ? 700 : 500, color: language === l.code ? "#1a1a2a" : "#6b6b8a", display: "flex", alignItems: "center", gap: 5, boxShadow: language === l.code ? "0 1px 3px rgba(0,0,0,0.08)" : "none" }}>
+              <span>{l.flag}</span> {l.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
