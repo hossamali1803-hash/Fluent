@@ -172,6 +172,24 @@ export default function Home() {
         </div>
       </div>
 
+      {/* Create your own */}
+      <button
+        onClick={() => router.push("/create")}
+        style={{
+          width: "100%", background: "#fffbf0", border: "1.5px solid #f59e0b50",
+          borderRadius: 16, padding: "16px 20px", cursor: "pointer",
+          display: "flex", alignItems: "center", gap: 16, marginBottom: 32,
+          textAlign: "left", boxShadow: "0 1px 4px rgba(245,158,11,0.08)",
+        }}
+      >
+        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #f59e0b, #f97316)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>✨</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a2a", marginBottom: 2 }}>Create your own</div>
+          <div style={{ fontSize: 13, color: "#6b6b8a" }}>Describe any situation — text or voice</div>
+        </div>
+        <span style={{ color: "#f59e0b", fontSize: 18 }}>→</span>
+      </button>
+
       {/* Themes */}
       {Object.entries(THEMES).filter(([category]) => selectedThemes.length === 0 || selectedThemes.includes(category)).map(([category, theme]) => {
         const staticItems = TEMPLATES.filter((t) => t.category === category && !hidden.includes(t.id));
