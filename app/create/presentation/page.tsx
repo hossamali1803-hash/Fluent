@@ -34,18 +34,17 @@ export default function CreatePresentationPage() {
       setRenderProgress(1);
 
       const res = await fetch("/api/render-pdf", { method: "POST", body: form });
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const { images, error } = await res.json();
-      if (error) throw new Error(error);
+      const json = await res.json();
+      if (!res.ok || json.error) throw new Error(json.error || `Server error ${res.status}`);
 
-      const total = images.length;
+      const total = json.images.length;
       setSlideCount(total);
 
       // Convert base64 images to blobs and store in IndexedDB
       const blobs: Blob[] = [];
-      for (let i = 0; i < images.length; i++) {
+      for (let i = 0; i < json.images.length; i++) {
         setRenderProgress(i + 1);
-        const binary = atob(images[i]);
+        const binary = atob(json.images[i]);
         const bytes = new Uint8Array(binary.length);
         for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
         blobs.push(new Blob([bytes], { type: "image/jpeg" }));
