@@ -30,16 +30,9 @@ export default function CreatePresentationPage() {
     try {
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
 
-      // Fetch worker from our own server (same-origin) and create a blob URL.
-      // This avoids cross-origin worker restrictions on iOS Safari.
-      try {
-        const res = await fetch("/api/pdf-worker");
-        if (res.ok) {
-          const script = await res.text();
-          const blob = new Blob([script], { type: "application/javascript" });
-          GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
-        }
-      } catch {}
+      // Use same-origin URL directly — pdfjs-dist 4.x creates module workers,
+      // so a same-origin path avoids all cross-origin restrictions on iOS Safari.
+      GlobalWorkerOptions.workerSrc = "/api/pdf-worker";
 
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
@@ -69,7 +62,8 @@ export default function CreatePresentationPage() {
       await saveSlideImages(blobs);
     } catch (err) {
       console.error("[PDF]", err);
-      setFileError("Could not process PDF — try a different file.");
+      const msg = err instanceof Error ? err.message : String(err);
+      setFileError(`PDF error: ${msg}`);
       setPdfFile(null);
       setSlideCount(null);
     }
