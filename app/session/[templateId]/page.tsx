@@ -32,6 +32,7 @@ export default function SessionPage() {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const sessionActiveRef = useRef(true);
+  const listeningRef = useRef(false);
   const vadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const vadActiveRef = useRef(false);
   const hasSpeechRef = useRef(false);
@@ -116,6 +117,8 @@ export default function SessionPage() {
   }
 
   async function startListening() {
+    if (!sessionActiveRef.current || listeningRef.current) return;
+    listeningRef.current = true;
     setStatus("listening");
     setLiveTranscript("");
     setAudioLevel(0);
@@ -169,6 +172,7 @@ export default function SessionPage() {
   }
 
   async function stopAndSend() {
+    listeningRef.current = false;
     vadActiveRef.current = false;
     if (vadTimerRef.current) { clearTimeout(vadTimerRef.current); vadTimerRef.current = null; }
     setAudioLevel(0);
@@ -238,6 +242,7 @@ export default function SessionPage() {
 
   function stopEverything() {
     sessionActiveRef.current = false;
+    listeningRef.current = false;
     vadActiveRef.current = false;
     if (vadTimerRef.current) { clearTimeout(vadTimerRef.current); vadTimerRef.current = null; }
     // Stop AudioContext source (main audio playback path)

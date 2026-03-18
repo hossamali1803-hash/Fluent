@@ -41,6 +41,7 @@ export default function TaskPracticePage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
+  const listeningRef = useRef(false);
   const vadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const vadActiveRef = useRef(false);
   const hasSpeechRef = useRef(false);
@@ -114,6 +115,8 @@ export default function TaskPracticePage() {
   }
 
   async function startListening() {
+    if (listeningRef.current) return;
+    listeningRef.current = true;
     setStage("listening");
     setLiveTranscript("");
     setAudioLevel(0);
@@ -163,6 +166,7 @@ export default function TaskPracticePage() {
 
   async function stopAndSend() {
     if (!task) return;
+    listeningRef.current = false;
     vadActiveRef.current = false;
     if (vadTimerRef.current) { clearTimeout(vadTimerRef.current); vadTimerRef.current = null; }
     setAudioLevel(0);
@@ -265,6 +269,7 @@ export default function TaskPracticePage() {
   }
 
   function retry() {
+    listeningRef.current = false;
     vadActiveRef.current = false;
     try { mediaRecorderRef.current?.stop(); } catch {}
     mediaRecorderRef.current = null;
