@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { getPresentationFile, clearPresentationFile } from "@/lib/presentationFile";
+import { getAllSlideUrls, clearSlides } from "@/lib/presentationFile";
 
 type Phase = "ready" | "presenting" | "transcribing" | "qa" | "done";
 type QAStatus = "speaking" | "listening" | "processing";
@@ -18,14 +18,10 @@ export default function PresentationSession() {
   const [config, setConfig] = useState<PresentationConfig | null>(null);
   const [phase, setPhase] = useState<Phase>("ready");
 
-  // PDF state
-  const [pdfDoc, setPdfDoc] = useState<any>(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [currentSlide, setCurrentSlide] = useState(1);
-  const [totalSlides, setTotalSlides] = useState(0);
-  const [renderingSlide, setRenderingSlide] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const renderTaskRef = useRef<any>(null);
+  // Slide images (pre-rendered on create page)
+  const [slideUrls, setSlideUrls] = useState<string[]>([]);
+  const [slidesLoading, setSlidesLoading] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState(0); // 0-indexed
 
   // Recording state
   const [elapsed, setElapsed] = useState(0);
@@ -57,13 +53,15 @@ export default function PresentationSession() {
 
   useEffect(() => {
     const raw = localStorage.getItem(`presentation-${id}`);
-    if (raw) {
-      const cfg = JSON.parse(raw) as PresentationConfig;
-      setConfig(cfg);
-      if (cfg.hasPdf) {
-        setPdfLoading(true);
-        loadPdf(cfg);
-      }
+    if (!raw) return;
+    const cfg = JSON.parse(raw) as PresentationConfig;
+    setConfig(cfg);
+    if (cfg.hasPdf) {
+      setSlidesLoading(true);
+      getAllSlideUrls().then((urls) => {
+        setSlideUrls(urls);
+        setSlidesLoading(false);
+      });
     }
   }, [id]);
 
@@ -72,99 +70,23 @@ export default function PresentationSession() {
   useEffect(() => () => {
     sessionActiveRef.current = false;
     cleanup();
-    clearPresentationFile(); // async, fire-and-forget on unmount
+    clearSlides();
   }, []);
 
   // Keyboard navigation
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (phase !== "presenting") return;
-      if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === " ") nextSlide();
-      if (e.key === "ArrowLeft" || e.key === "ArrowUp") prevSlide();
+      if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === " ")
+        setCurrentSlide((s) => Math.min(s + 1, slideUrls.length - 1));
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp")
+        setCurrentSlide((s) => Math.max(s - 1, 0));
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [phase, currentSlide, totalSlides]);
+  }, [phase, slideUrls.length]);
 
-  // ── PDF ──────────────────────────────────────────────────────────────
-  async function loadPdf(cfg: PresentationConfig) {
-    // Safety net: never block the start button for more than 10 seconds
-    const giveUp = setTimeout(() => {
-      setConfig((c) => c ? { ...c, hasPdf: false } : c);
-      setPdfLoading(false);
-    }, 10000);
-    try {
-      const file = await getPresentationFile();
-      if (!file) {
-        setConfig({ ...cfg, hasPdf: false });
-        clearTimeout(giveUp);
-        setPdfLoading(false);
-        return;
-      }
-      const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
-      GlobalWorkerOptions.workerSrc = "/api/pdf-worker";
-      const arrayBuffer = await file.arrayBuffer();
-      const doc = await getDocument({ data: arrayBuffer }).promise;
-      setPdfDoc(doc);
-      setTotalSlides(doc.numPages);
-    } catch (e) {
-      console.error("[loadPdf]", e);
-      setConfig((c) => c ? { ...c, hasPdf: false } : c);
-    }
-    clearTimeout(giveUp);
-    setPdfLoading(false);
-  }
-
-  const renderPage = useCallback(async (doc: any, pageNum: number) => {
-    if (!doc) return;
-    // Wait for canvas to be in the DOM
-    let canvas = canvasRef.current;
-    if (!canvas) {
-      await new Promise<void>((r) => requestAnimationFrame(() => r()));
-      canvas = canvasRef.current;
-    }
-    if (!canvas) return;
-
-    if (renderTaskRef.current) {
-      try { renderTaskRef.current.cancel(); } catch {}
-    }
-    setRenderingSlide(true);
-    try {
-      const page = await doc.getPage(pageNum);
-      // Use window dimensions directly — reliable on mobile
-      const topBar = 52; const bottomBar = 60;
-      const maxW = window.innerWidth;
-      const maxH = window.innerHeight - topBar - bottomBar - 6;
-      const vp0 = page.getViewport({ scale: 1 });
-      const scale = Math.min(maxW / vp0.width, maxH / vp0.height);
-      const viewport = page.getViewport({ scale });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext("2d")!;
-      const task = page.render({ canvasContext: ctx, viewport });
-      renderTaskRef.current = task;
-      await task.promise;
-    } catch (e: any) {
-      if (e?.name !== "RenderingCancelledException") console.error("[renderPage]", e);
-    }
-    setRenderingSlide(false);
-  }, []);
-
-  useEffect(() => {
-    if (pdfDoc && phase === "presenting") {
-      // rAF ensures the PDF view is mounted and painted before we try to render
-      requestAnimationFrame(() => renderPage(pdfDoc, currentSlide));
-    }
-  }, [pdfDoc, currentSlide, phase, renderPage]);
-
-  function nextSlide() {
-    setCurrentSlide((s) => Math.min(s + 1, totalSlides));
-  }
-  function prevSlide() {
-    setCurrentSlide((s) => Math.max(s - 1, 1));
-  }
-
-  // ── CLEANUP ───────────────────────────────────────────────────────────
+  // ── CLEANUP ─────────────────────────────────────────────────────────
   function cleanup() {
     if (timerRef.current) clearInterval(timerRef.current);
     if (qaTimerRef.current) clearInterval(qaTimerRef.current);
@@ -176,7 +98,7 @@ export default function PresentationSession() {
     try { mediaRecorderRef.current?.stop(); } catch {}
   }
 
-  // ── PRESENT ───────────────────────────────────────────────────────────
+  // ── PRESENT ─────────────────────────────────────────────────────────
   async function beginPresenting() {
     try {
       if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
@@ -194,7 +116,7 @@ export default function PresentationSession() {
     mr.start(1000);
     mediaRecorderRef.current = mr;
     setPhase("presenting");
-    setCurrentSlide(1);
+    setCurrentSlide(0);
 
     timerRef.current = setInterval(() => {
       elapsedRef.current += 1;
@@ -212,8 +134,7 @@ export default function PresentationSession() {
     const ctx = audioCtxRef.current!;
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
-    const src = ctx.createMediaStreamSource(stream);
-    src.connect(analyser);
+    ctx.createMediaStreamSource(stream).connect(analyser);
     const data = new Uint8Array(analyser.frequencyBinCount);
     let animating = true;
     function tick() {
@@ -224,9 +145,7 @@ export default function PresentationSession() {
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
-    // Stop animation when phase changes
-    const stop = () => { animating = false; };
-    (window as any).__stopLevelTick = stop;
+    (window as any).__stopLevelTick = () => { animating = false; };
   }
 
   async function donePresenting() {
@@ -267,7 +186,7 @@ export default function PresentationSession() {
     router.push("/debrief");
   }
 
-  // ── Q&A ──────────────────────────────────────────────────────────────
+  // ── Q&A ─────────────────────────────────────────────────────────────
   async function startQA(presentationText: string) {
     setPhase("qa");
     qaTimerRef.current = setInterval(() => setQaElapsed((s) => s + 1), 1000);
@@ -419,15 +338,17 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
       if (isDone) {
         await new Promise<void>(async (resolve) => {
           if (data.audioBase64) {
-            const ctx = audioCtxRef.current!;
-            await ctx.resume();
-            const binary = atob(data.audioBase64);
-            const bytes = new Uint8Array(binary.length);
-            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-            const buf = await ctx.decodeAudioData(bytes.buffer);
-            const src = ctx.createBufferSource();
-            src.buffer = buf; src.connect(ctx.destination);
-            src.onended = () => resolve(); src.start(0);
+            try {
+              const ctx = audioCtxRef.current!;
+              await ctx.resume();
+              const binary = atob(data.audioBase64);
+              const bytes = new Uint8Array(binary.length);
+              for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+              const buf = await ctx.decodeAudioData(bytes.buffer);
+              const src = ctx.createBufferSource();
+              src.buffer = buf; src.connect(ctx.destination);
+              src.onended = () => resolve(); src.start(0);
+            } catch { resolve(); }
           } else resolve();
         });
         endQA();
@@ -456,10 +377,11 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
   const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   const remaining = config ? Math.max(0, config.targetMinutes * 60 - elapsed) : 0;
   const progress = config ? Math.min((elapsed / (config.targetMinutes * 60)) * 100, 100) : 0;
+  const totalSlides = slideUrls.length;
 
   if (!config) return <div style={{ minHeight: "100vh", background: "#f5f4ff" }} />;
 
-  // ── READY ─────────────────────────────────────────────────────────────
+  // ── READY ────────────────────────────────────────────────────────────
   if (phase === "ready") return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "40px 20px", display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
       <button onClick={() => router.push("/create/presentation")} style={{ alignSelf: "flex-start", background: "transparent", border: "none", fontSize: 20, cursor: "pointer", color: "#6b6b8a" }}>←</button>
@@ -468,45 +390,40 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
         <div style={{ fontSize: 22, fontWeight: 800, color: "#1a1a2a", marginBottom: 6 }}>{config.title}</div>
         <div style={{ color: "#6b6b8a", fontSize: 14 }}>
           {config.targetMinutes} min{config.hasQA ? ` · ${config.qaCount} Q&A questions` : ""}
-          {pdfLoading ? " · Loading slides..." : pdfDoc ? ` · ${totalSlides} slides` : ""}
+          {slidesLoading ? " · Loading slides…" : totalSlides > 0 ? ` · ${totalSlides} slides` : ""}
         </div>
       </div>
       <div style={{ background: "#fffbf0", borderRadius: 14, padding: "14px 18px", border: "1px solid #fde68a", width: "100%", boxSizing: "border-box" }}>
         <div style={{ color: "#6b6b8a", fontSize: 13, lineHeight: 1.7 }}>
-          {config.hasPdf && pdfDoc ? (
-            <>📊 Your slides will appear full-screen<br />Use <strong>← →</strong> keys or buttons to navigate<br />Recording runs in the background</>
+          {totalSlides > 0 ? (
+            <>📊 Your slides will appear full-screen<br />Tap arrows or use <strong>← →</strong> keys to navigate<br />Recording runs in the background</>
           ) : (
-            <>Present for up to {config.targetMinutes} minutes<br />Click "Done" when finished{config.hasQA ? ` · Then ${config.qaCount} Q&A questions` : ""}</>
+            <>Present for up to {config.targetMinutes} minutes<br />Tap "Done" when finished{config.hasQA ? ` · Then ${config.qaCount} Q&A questions` : ""}</>
           )}
         </div>
       </div>
       <button
         onClick={beginPresenting}
-        disabled={pdfLoading}
-        style={{ width: "100%", padding: "18px", borderRadius: 14, border: "none", background: pdfLoading ? "#f0eeff" : "#f59e0b", color: pdfLoading ? "#6b6b8a" : "#0f0e17", fontSize: 18, fontWeight: 800, cursor: pdfLoading ? "default" : "pointer" }}
-      >{pdfLoading ? "Loading slides..." : pdfDoc ? "Start with slides" : "Start presentation"}</button>
+        disabled={slidesLoading}
+        style={{ width: "100%", padding: "18px", borderRadius: 14, border: "none", background: slidesLoading ? "#f0eeff" : "#f59e0b", color: slidesLoading ? "#6b6b8a" : "#0f0e17", fontSize: 18, fontWeight: 800, cursor: slidesLoading ? "default" : "pointer" }}
+      >{slidesLoading ? "Loading slides…" : totalSlides > 0 ? "Start with slides" : "Start presentation"}</button>
     </div>
   );
 
-  // ── PRESENTING WITH PDF ───────────────────────────────────────────────
-  if (phase === "presenting" && pdfDoc) return (
+  // ── PRESENTING WITH SLIDES ───────────────────────────────────────────
+  if (phase === "presenting" && totalSlides > 0) return (
     <div style={{ display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#0f0e17" }}>
       {/* Top bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: "rgba(0,0,0,0.85)", flexShrink: 0, zIndex: 10 }}>
         <div style={{ color: "#ffffff", fontWeight: 700, fontSize: 14, maxWidth: "40%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{config.title}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {/* Mic level */}
           <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
             {[0.5, 0.8, 1, 0.8, 0.5].map((scale, i) => (
               <div key={i} style={{ width: 3, borderRadius: 99, background: "#f59e0b", height: `${4 + audioLevel * 14 * scale}px`, transition: "height 0.08s" }} />
             ))}
           </div>
-          {/* Timer */}
           <div style={{ color: remaining <= 60 ? "#ef4444" : "#f59e0b", fontWeight: 800, fontSize: 16, fontVariant: "tabular-nums", minWidth: 52 }}>{fmt(remaining)}</div>
-          <button
-            onClick={donePresenting}
-            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
-          >End</button>
+          <button onClick={donePresenting} style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", color: "#ef4444", borderRadius: 8, padding: "6px 12px", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>End</button>
         </div>
       </div>
 
@@ -515,44 +432,37 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
         <div style={{ height: 3, background: "#f59e0b", width: `${progress}%`, transition: "width 1s linear" }} />
       </div>
 
-      {/* Slide canvas */}
+      {/* Slide image */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative" }}>
-        <canvas
-          ref={canvasRef}
-          style={{ maxWidth: "100%", maxHeight: "100%", boxShadow: "0 8px 40px rgba(0,0,0,0.6)", opacity: renderingSlide ? 0.7 : 1, transition: "opacity 0.15s" }}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={slideUrls[currentSlide]}
+          alt={`Slide ${currentSlide + 1}`}
+          style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", boxShadow: "0 8px 40px rgba(0,0,0,0.6)", userSelect: "none" }}
+          draggable={false}
         />
-        {renderingSlide && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ width: 20, height: 20, border: "3px solid #f59e0b", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
-          </div>
+        {currentSlide > 0 && (
+          <button onClick={() => setCurrentSlide((s) => s - 1)} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "#ffffff", width: 44, height: 44, borderRadius: "50%", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
         )}
-        {/* Side nav arrows */}
-        {currentSlide > 1 && (
-          <button onClick={prevSlide} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "#ffffff", width: 44, height: 44, borderRadius: "50%", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>‹</button>
-        )}
-        {currentSlide < totalSlides && (
-          <button onClick={nextSlide} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "#ffffff", width: 44, height: 44, borderRadius: "50%", fontSize: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
+        {currentSlide < totalSlides - 1 && (
+          <button onClick={() => setCurrentSlide((s) => s + 1)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,0.5)", border: "none", color: "#ffffff", width: 44, height: 44, borderRadius: "50%", fontSize: 22, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>›</button>
         )}
       </div>
 
       {/* Bottom bar */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px 16px", background: "rgba(0,0,0,0.85)", flexShrink: 0 }}>
-        <button onClick={prevSlide} disabled={currentSlide === 1} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: currentSlide === 1 ? "rgba(255,255,255,0.3)" : "#ffffff", borderRadius: 8, padding: "8px 16px", cursor: currentSlide === 1 ? "default" : "pointer", fontSize: 14 }}>← Prev</button>
-        <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: 600 }}>
-          {currentSlide} / {totalSlides}
-          <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginLeft: 8 }}>← → keys</span>
-        </div>
-        {currentSlide < totalSlides ? (
-          <button onClick={nextSlide} style={{ background: "#f59e0b", border: "none", color: "#0f0e17", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>Next →</button>
+        <button onClick={() => setCurrentSlide((s) => Math.max(s - 1, 0))} disabled={currentSlide === 0} style={{ background: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: currentSlide === 0 ? "rgba(255,255,255,0.3)" : "#ffffff", borderRadius: 8, padding: "8px 16px", cursor: currentSlide === 0 ? "default" : "pointer", fontSize: 14 }}>← Prev</button>
+        <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, fontWeight: 600 }}>{currentSlide + 1} / {totalSlides}</div>
+        {currentSlide < totalSlides - 1 ? (
+          <button onClick={() => setCurrentSlide((s) => s + 1)} style={{ background: "#f59e0b", border: "none", color: "#0f0e17", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>Next →</button>
         ) : (
           <button onClick={donePresenting} style={{ background: "#f59e0b", border: "none", color: "#0f0e17", borderRadius: 8, padding: "8px 16px", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>Done ✓</button>
         )}
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   );
 
-  // ── PRESENTING WITHOUT PDF ────────────────────────────────────────────
+  // ── PRESENTING WITHOUT SLIDES ────────────────────────────────────────
   if (phase === "presenting") return (
     <div style={{ display: "flex", flexDirection: "column", position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "#fffbf0" }}>
       <div style={{ padding: "16px 20px", borderBottom: "1px solid #fde68a", background: "#ffffff", flexShrink: 0 }}>
@@ -580,7 +490,7 @@ Keep each question concise (under 20 words). After all ${config?.qaCount ?? 3} q
     </div>
   );
 
-  // ── TRANSCRIBING ──────────────────────────────────────────────────────
+  // ── TRANSCRIBING ─────────────────────────────────────────────────────
   if (phase === "transcribing") return (
     <div style={{ minHeight: "100vh", background: "#f5f4ff", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
       <div style={{ width: 16, height: 16, border: "3px solid #f59e0b", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />

@@ -1,7 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { setPresentationFile, clearPresentationFile } from "@/lib/presentationFile";
+import { saveSlideImages, clearSlides } from "@/lib/presentationFile";
 
 export default function CreatePresentationPage() {
   const router = useRouter();
@@ -13,6 +13,7 @@ export default function CreatePresentationPage() {
   const [slideCount, setSlideCount] = useState<number | null>(null);
   const [fileError, setFileError] = useState("");
   const [loadingPdf, setLoadingPdf] = useState(false);
+  const [renderProgress, setRenderProgress] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -22,25 +23,50 @@ export default function CreatePresentationPage() {
     if (!file.type.includes("pdf")) { setFileError("Please upload a PDF file."); return; }
     if (file.size > 50_000_000) { setFileError("File too large (max 50 MB)."); return; }
     setLoadingPdf(true);
+    setRenderProgress(0);
     setPdfFile(file);
-    await setPresentationFile(file);
     if (!title) setTitle(file.name.replace(/\.pdf$/i, ""));
-    // Count pages
+
     try {
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
       GlobalWorkerOptions.workerSrc = "/api/pdf-worker";
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await getDocument({ data: arrayBuffer }).promise;
-      setSlideCount(pdf.numPages);
-    } catch { setSlideCount(null); }
+      const total = pdf.numPages;
+      setSlideCount(total);
+
+      // Render every page to a blob and store in IndexedDB
+      const blobs: Blob[] = [];
+      const offscreen = document.createElement("canvas");
+      for (let p = 1; p <= total; p++) {
+        setRenderProgress(p);
+        const page = await pdf.getPage(p);
+        const vp = page.getViewport({ scale: 2 }); // 2x for sharpness
+        offscreen.width = vp.width;
+        offscreen.height = vp.height;
+        const ctx = offscreen.getContext("2d")!;
+        await (page.render as any)({ canvasContext: ctx, viewport: vp }).promise;
+        const blob = await new Promise<Blob>((res) =>
+          offscreen.toBlob((b) => res(b!), "image/jpeg", 0.9)
+        );
+        blobs.push(blob);
+      }
+      await saveSlideImages(blobs);
+    } catch (err) {
+      console.error(err);
+      setFileError("Could not process PDF. Try a smaller file.");
+      setPdfFile(null);
+      setSlideCount(null);
+    }
     setLoadingPdf(false);
+    setRenderProgress(0);
   }
 
   function removePdf() {
     setPdfFile(null);
     setSlideCount(null);
     if (fileRef.current) fileRef.current.value = "";
-    clearPresentationFile();
+    clearSlides();
   }
 
   function start() {
@@ -48,13 +74,19 @@ export default function CreatePresentationPage() {
     const id = `presentation-${Date.now()}`;
     const config = {
       id, title: title.trim(), targetMinutes, hasQA, qaCount,
-      hasPdf: !!pdfFile,
+      hasPdf: !!pdfFile && !!slideCount,
       slideCount: slideCount ?? undefined,
       language: localStorage.getItem("practiceLanguage") ?? "en",
     };
     localStorage.setItem(`presentation-${id}`, JSON.stringify(config));
     router.push(`/session-presentation/${id}`);
   }
+
+  const loadingLabel = loadingPdf
+    ? (slideCount && renderProgress > 0
+        ? `Rendering slide ${renderProgress} / ${slideCount}…`
+        : "Processing PDF…")
+    : null;
 
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "24px 20px 60px" }}>
@@ -66,21 +98,32 @@ export default function CreatePresentationPage() {
         </div>
       </div>
 
-      {/* PDF upload — primary CTA */}
+      {/* PDF upload */}
       <div style={{ background: "#ffffff", borderRadius: 18, border: "1.5px solid #ece9ff", padding: "22px", marginBottom: 18, boxShadow: "0 1px 4px rgba(0,0,0,0.05)" }}>
         <div style={{ fontWeight: 700, color: "#1a1a2a", fontSize: 15, marginBottom: 4 }}>Upload your presentation</div>
         <div style={{ color: "#6b6b8a", fontSize: 13, marginBottom: 16 }}>We'll show your slides full-screen so you can present just like in a real meeting</div>
 
         {pdfFile ? (
-          <div style={{ background: "#f0fdf9", border: "1.5px solid #a7f3d0", borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: 28 }}>📊</span>
-            <div style={{ flex: 1 }}>
-              <div style={{ color: "#1a1a2a", fontWeight: 700, fontSize: 14 }}>{pdfFile.name}</div>
-              <div style={{ color: "#6b6b8a", fontSize: 12, marginTop: 2 }}>
-                {loadingPdf ? "Counting slides..." : slideCount ? `${slideCount} slides · ${(pdfFile.size / 1024 / 1024).toFixed(1)} MB` : `${(pdfFile.size / 1024 / 1024).toFixed(1)} MB`}
+          <div style={{ background: "#f0fdf9", border: "1.5px solid #a7f3d0", borderRadius: 14, padding: "14px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 28 }}>📊</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#1a1a2a", fontWeight: 700, fontSize: 14 }}>{pdfFile.name}</div>
+                <div style={{ color: "#6b6b8a", fontSize: 12, marginTop: 2 }}>
+                  {loadingLabel ?? (slideCount ? `${slideCount} slides · ${(pdfFile.size / 1024 / 1024).toFixed(1)} MB` : `${(pdfFile.size / 1024 / 1024).toFixed(1)} MB`)}
+                </div>
               </div>
+              {!loadingPdf && (
+                <button onClick={removePdf} style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: 18, cursor: "pointer" }}>✕</button>
+              )}
             </div>
-            <button onClick={removePdf} style={{ background: "transparent", border: "none", color: "#ef4444", fontSize: 18, cursor: "pointer" }}>✕</button>
+            {loadingPdf && slideCount && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ background: "#e6f7f1", borderRadius: 99, height: 6 }}>
+                  <div style={{ background: "#10b981", borderRadius: 99, height: 6, width: `${(renderProgress / slideCount) * 100}%`, transition: "width 0.3s" }} />
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <button
@@ -149,7 +192,7 @@ export default function CreatePresentationPage() {
         onClick={start}
         disabled={!title.trim() || loadingPdf}
         style={{ width: "100%", padding: "16px", borderRadius: 14, border: "none", background: title.trim() && !loadingPdf ? "#f59e0b" : "#f0eeff", color: title.trim() && !loadingPdf ? "#0f0e17" : "#6b6b8a", fontSize: 17, fontWeight: 800, cursor: title.trim() && !loadingPdf ? "pointer" : "default" }}
-      >{pdfFile ? "Start with slides" : "Start presentation"}</button>
+      >{pdfFile ? (loadingPdf ? "Preparing slides…" : "Start with slides") : "Start presentation"}</button>
     </div>
   );
 }
