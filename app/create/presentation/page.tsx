@@ -28,35 +28,27 @@ export default function CreatePresentationPage() {
     if (!title) setTitle(file.name.replace(/\.pdf$/i, ""));
 
     try {
-      const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
+      // Upload PDF to server for rendering — avoids all browser worker issues
+      const form = new FormData();
+      form.append("pdf", file);
+      setRenderProgress(1);
 
-      // pdfjs-dist 4.x uses a classic (non-module) worker — CDN URL works reliably
-      GlobalWorkerOptions.workerSrc =
-        "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js";
+      const res = await fetch("/api/render-pdf", { method: "POST", body: form });
+      if (!res.ok) throw new Error(`Server error ${res.status}`);
+      const { images, error } = await res.json();
+      if (error) throw new Error(error);
 
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await getDocument({ data: arrayBuffer } as any).promise;
-      const total = pdf.numPages;
+      const total = images.length;
       setSlideCount(total);
 
-      // Render every page to a blob — scale to fit 1080px wide for memory efficiency
+      // Convert base64 images to blobs and store in IndexedDB
       const blobs: Blob[] = [];
-      const offscreen = document.createElement("canvas");
-      for (let p = 1; p <= total; p++) {
-        setRenderProgress(p);
-        const page = await (pdf as any).getPage(p);
-        const vp0 = page.getViewport({ scale: 1 });
-        const scale = Math.min(1080 / vp0.width, 1080 / vp0.height, 2);
-        const vp = page.getViewport({ scale });
-        offscreen.width = vp.width;
-        offscreen.height = vp.height;
-        const ctx = offscreen.getContext("2d")!;
-        ctx.clearRect(0, 0, vp.width, vp.height);
-        await page.render({ canvasContext: ctx, viewport: vp } as any).promise;
-        const blob = await new Promise<Blob>((res, rej) =>
-          offscreen.toBlob((b) => b ? res(b) : rej(new Error("toBlob failed")), "image/jpeg", 0.85)
-        );
-        blobs.push(blob);
+      for (let i = 0; i < images.length; i++) {
+        setRenderProgress(i + 1);
+        const binary = atob(images[i]);
+        const bytes = new Uint8Array(binary.length);
+        for (let j = 0; j < binary.length; j++) bytes[j] = binary.charCodeAt(j);
+        blobs.push(new Blob([bytes], { type: "image/jpeg" }));
       }
       await saveSlideImages(blobs);
     } catch (err) {
@@ -91,8 +83,8 @@ export default function CreatePresentationPage() {
 
   const loadingLabel = loadingPdf
     ? (slideCount && renderProgress > 0
-        ? `Rendering slide ${renderProgress} / ${slideCount}…`
-        : "Processing PDF…")
+        ? `Saving slide ${renderProgress} / ${slideCount}…`
+        : "Uploading & rendering PDF…")
     : null;
 
   return (
