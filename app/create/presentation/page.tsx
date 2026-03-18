@@ -29,32 +29,49 @@ export default function CreatePresentationPage() {
 
     try {
       const { GlobalWorkerOptions, getDocument } = await import("pdfjs-dist");
-      GlobalWorkerOptions.workerSrc = "/api/pdf-worker";
+
+      // Try to set up worker: fetch script → blob URL → fake worker fallback
+      try {
+        const res = await fetch("/api/pdf-worker");
+        if (res.ok) {
+          const script = await res.text();
+          const blob = new Blob([script], { type: "text/javascript" });
+          GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+        } else {
+          GlobalWorkerOptions.workerSrc = "";
+        }
+      } catch {
+        GlobalWorkerOptions.workerSrc = "";
+      }
+
       const arrayBuffer = await file.arrayBuffer();
-      const pdf = await getDocument({ data: arrayBuffer }).promise;
+      const pdf = await getDocument({ data: arrayBuffer } as any).promise;
       const total = pdf.numPages;
       setSlideCount(total);
 
-      // Render every page to a blob and store in IndexedDB
+      // Render every page to a blob — scale to fit 1080px wide for memory efficiency
       const blobs: Blob[] = [];
       const offscreen = document.createElement("canvas");
       for (let p = 1; p <= total; p++) {
         setRenderProgress(p);
-        const page = await pdf.getPage(p);
-        const vp = page.getViewport({ scale: 2 }); // 2x for sharpness
+        const page = await (pdf as any).getPage(p);
+        const vp0 = page.getViewport({ scale: 1 });
+        const scale = Math.min(1080 / vp0.width, 1080 / vp0.height, 2);
+        const vp = page.getViewport({ scale });
         offscreen.width = vp.width;
         offscreen.height = vp.height;
         const ctx = offscreen.getContext("2d")!;
-        await (page.render as any)({ canvasContext: ctx, viewport: vp }).promise;
-        const blob = await new Promise<Blob>((res) =>
-          offscreen.toBlob((b) => res(b!), "image/jpeg", 0.9)
+        ctx.clearRect(0, 0, vp.width, vp.height);
+        await page.render({ canvasContext: ctx, viewport: vp } as any).promise;
+        const blob = await new Promise<Blob>((res, rej) =>
+          offscreen.toBlob((b) => b ? res(b) : rej(new Error("toBlob failed")), "image/jpeg", 0.85)
         );
         blobs.push(blob);
       }
       await saveSlideImages(blobs);
     } catch (err) {
-      console.error(err);
-      setFileError("Could not process PDF. Try a smaller file.");
+      console.error("[PDF render]", err);
+      setFileError("Could not process PDF. Please try a different file.");
       setPdfFile(null);
       setSlideCount(null);
     }
